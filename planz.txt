@@ -1,0 +1,31 @@
+gravity forms
+
+dead and injured streamlit project making using of fragments,dialogs,popovers
+
+
+dialogs will handle authentications
+popover will handle setting of unique number
+
+gamestable
+	Colums
+		uniqueid
+		uniqueidofplayercreatinggame (default uniqueid of player that created the game)
+		hasplayerjoined (default False)
+		uniqueidofplayerwhowon (default null)
+
+	Added columns
+		uniqueidofJoinedplayer (default uniqueid of player that created the game)
+
+	updated values
+		hasplayerjoined (True)
+		uniqueidofplayerwhowwon (uniqueid of player who won)
+
+gamedetailstable
+	columns
+		uniqueid
+		gameid
+		uniqueidofplayerwhowon
+		uniquwidofplayerwholost
+		typeofgameplayerwon (joined/created)
+		timeittooktowin
+		
