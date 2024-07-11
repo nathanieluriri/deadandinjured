@@ -29,3 +29,26 @@ gamedetailstable
 		typeofgameplayerwon (joined/created)
 		timeittooktowin
 		
+
+
+ui layout
+use toast to let player know it is their turn
+when a user enters something through the chat input create different conditions on what should happen if it is the players turn and it was the correct thing that was entered it should work
+tabs,columns,sidebar and color theme
+basic premise of the game should be done today (create and join game feature and both parties will be able to guess)
+247 door delivery (pricing)
+
+
+total power ups for each game equals to 5,
+play rock paper scissors the winner gets three power ups and the loser gets 2
+
+@st.experimental_fragment(run_every=5)
+def whosturn():
+    st.toast(":gray-background[Nathaniel's Turn] play",icon=":material/thumb_up:")
+whosturn()
+
+
+player that joined can have the gameplay id but player that creates a game will have to search for the game play id once the game has been created
+
+
+conditions to join a game first off player id that created a game can't join a game secondly a game can only be joined once meaning a game id can only appear in the game play object once
