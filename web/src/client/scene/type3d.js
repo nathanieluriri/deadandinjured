@@ -62,7 +62,6 @@ export class CodeBlocks {
     const sd = SIDES[side];
     this.group = new THREE.Group();
     this.group.position.set(0, 0, sd.z + sd.dir * 4.2);
-    this.group.rotation.y = side === "me" ? 0 : Math.PI;
     const wood = new THREE.MeshStandardMaterial({ color: COLORS.wood, roughness: 0.85 });
     const crate = new THREE.Mesh(new RoundedBoxGeometry(3.3, 0.7, 1.05, 2, 0.06), wood);
     crate.position.y = 0.35;
