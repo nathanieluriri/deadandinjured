@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dead &amp; Injured</title>
+<meta name="description" content="A live multiplayer code-breaking war game. Crack the enemy's four digits: dead is the right digit in the right place, injured is the right digit in the wrong place.">
+<meta name="theme-color" content="#0c0d12">
+<meta property="og:title" content="Dead &amp; Injured">
+<meta property="og:description" content="A live multiplayer code-breaking war game. Four digits, two squads, one code to crack.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="preload" href="/fonts/archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="%CSS%">
+</head>
+<body class="is-pre">
+<canvas id="gl" aria-hidden="true"></canvas>
+<div class="shade" aria-hidden="true"></div>
+<div class="hurt" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+
+<div class="stamp" id="stamp" aria-hidden="true"><b></b><span></span></div>
+<div class="bubble" id="bubble" aria-hidden="true"></div>
+
+<header class="top">
+  <button class="brand" id="brand" type="button">Dead &amp; Injured</button>
+  <div class="top-right">
+    <button class="link leave" id="leaveBtn" type="button">Leave</button>
+    <button class="link" id="manualBtn" type="button">Field manual</button>
+    <button class="sound" id="soundBtn" type="button" aria-pressed="true" aria-label="Sound">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/><path class="on" d="M15.5 9a4.2 4.2 0 0 1 0 6M18.2 6.6a7.6 7.6 0 0 1 0 10.8"/><path class="off" d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="screen menu" id="menu" aria-label="Main menu">
+    <div class="menu-in">
+      <p class="tag">A live code-breaking war game</p>
+      <nav class="menu-list">
+        <button type="button" class="item" data-open="soloSub"><span>Play the computer</span><i>01</i></button>
+        <div class="sub" id="soloSub" hidden>
+          <button type="button" class="chip" data-level="recruit">Recruit<small>Fires half blind</small></button>
+          <button type="button" class="chip" data-level="sergeant">Sergeant<small>Never wastes a shot</small></button>
+          <button type="button" class="chip" data-level="general">General<small>Reads every volley</small></button>
+        </div>
+        <button type="button" class="item" data-open="friendSub"><span>Play a friend</span><i>02</i></button>
+        <div class="sub" id="friendSub" hidden>
+          <button type="button" class="chip" id="createBtn">Open a room<small>Share the code</small></button>
+          <form class="join" id="joinForm" autocomplete="off">
+            <input id="joinCode" name="code" maxlength="5" placeholder="ROOM CODE" aria-label="Room code" autocapitalize="characters" spellcheck="false">
+            <button type="submit" class="chip">Join</button>
+          </form>
+        </div>
+        <button type="button" class="item" id="quickBtn"><span>Quick match</span><i>03</i></button>
+        <button type="button" class="item" id="boardBtn"><span>Leaderboard</span><i>04</i></button>
+      </nav>
+      <p class="who" id="who"></p>
+    </div>
+  </section>
+
+  <section class="screen wait" id="wait" aria-label="Waiting for an opponent">
+    <div class="win card">
+      <div class="win-bar"><i></i><i></i><i></i><span>room.open</span><em id="waitState">waiting</em></div>
+      <div class="win-body">
+        <p class="eyebrow">Room code</p>
+        <p class="code" id="roomCode">-----</p>
+        <p class="muted">Send this code or the link to a friend. The match starts the moment they arrive.</p>
+        <div class="row">
+          <button type="button" class="btn" id="shareBtn">Share the link</button>
+          <button type="button" class="link" id="cancelWait">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="screen search" id="search" aria-label="Quick match">
+    <div class="win card">
+      <div class="win-bar"><i></i><i></i><i></i><span>radio.search</span><em id="searchState">scanning</em></div>
+      <div class="win-body">
+        <div class="radar" aria-hidden="true"><i></i></div>
+        <p class="big" id="searchText">Scanning for an opponent</p>
+        <p class="muted" id="searchNote">Anyone who taps Quick match now is paired with you.</p>
+        <div class="row">
+          <button type="button" class="btn" id="searchSolo">Play the computer instead</button>
+          <button type="button" class="link" id="cancelSearch">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="screen match" id="match" aria-label="Match">
+    <div class="hud">
+      <div class="side me"><b class="name" id="meName">You</b><span class="crates" id="meCrates"></span><span class="tiles mini" id="myCode" title="Your code"></span></div>
+      <div class="turn" id="turn"><span id="turnLabel"></span><span class="timer" id="timer"><i></i></span></div>
+      <div class="side opp"><b class="name" id="oppName">Enemy</b><span class="crates" id="oppCrates"></span><i class="dot" id="oppDot" title="Online"></i></div>
+    </div>
+    <p class="note" id="note"></p>
+
+    <div class="rps" id="rps">
+      <button type="button" data-pick="rock"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M10 30c-3-6 1-13 7-15 3-6 11-7 15-2 6 0 10 6 7 12 2 5-2 11-8 11H18c-4 0-7-2-8-6z"/></svg><span>Rock</span></button>
+      <button type="button" data-pick="paper"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M13 7h16l7 7v27H13z"/><path d="M29 7v7h7M18 21h13M18 27h13M18 33h9"/></svg><span>Paper</span></button>
+      <button type="button" data-pick="scissors"><svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="14" cy="34" r="5"/><circle cx="30" cy="36" r="5"/><path d="M17 30 38 8M26 32 20 10"/></svg><span>Scissors</span></button>
+    </div>
+
+    <div class="logs" id="logs">
+      <div class="win log mine">
+        <div class="win-bar"><i></i><i></i><i></i><span>your.fire</span><em id="mineCount"></em></div>
+        <ol class="win-body" id="mineLog"></ol>
+      </div>
+      <div class="win log theirs">
+        <div class="win-bar"><i></i><i></i><i></i><span>enemy.fire</span><em id="theirCount"></em></div>
+        <ol class="win-body" id="theirLog"></ol>
+      </div>
+    </div>
+
+    <div class="dock" id="dock">
+      <div class="slots" id="slots" aria-live="off"><span></span><span></span><span></span><span></span></div>
+      <div class="pad" id="pad" role="group" aria-label="Keypad">
+        <button type="button" data-d="1">1</button><button type="button" data-d="2">2</button><button type="button" data-d="3">3</button><button type="button" data-d="4">4</button><button type="button" data-d="5">5</button>
+        <button type="button" data-d="6">6</button><button type="button" data-d="7">7</button><button type="button" data-d="8">8</button><button type="button" data-d="9">9</button><button type="button" data-d="0">0</button>
+        <button type="button" class="del" id="delBtn" aria-label="Delete">DEL</button>
+        <button type="button" class="fire" id="fireBtn">FIRE</button>
+      </div>
+      <div class="tools" id="tools">
+        <button type="button" class="tool" data-power="recon" title="Is this digit in their code?"><b>Recon</b><small>digit in?</small></button>
+        <button type="button" class="tool" data-power="sniper" title="Is this digit in this spot?"><b>Sniper</b><small>spot check</small></button>
+        <button type="button" class="tool" data-power="smoke" title="Their next volley only shows total hits"><b>Smoke</b><small>hide next</small></button>
+        <button type="button" class="tool alt" id="markBtn" aria-pressed="false" title="Mark digits you have ruled in or out"><b>Mark</b><small>notes</small></button>
+        <button type="button" class="tool alt" id="randomBtn" title="A random code"><b>Random</b><small>code</small></button>
+        <button type="button" class="tool alt" id="tauntBtn" title="Send a taunt"><b>Taunt</b><small>radio</small></button>
+        <button type="button" class="tool alt" id="logBtn" title="Show the volleys"><b>Log</b><small>volleys</small></button>
+      </div>
+      <div class="taunts" id="taunts" hidden></div>
+    </div>
+
+    <div class="over" id="over">
+      <div class="win card">
+        <div class="win-bar"><i></i><i></i><i></i><span>after.action</span><em id="overTag"></em></div>
+        <div class="win-body">
+          <p class="big" id="overTitle"></p>
+          <p class="muted" id="overText"></p>
+          <div class="codes" id="overCodes"></div>
+          <div class="row">
+            <button type="button" class="btn" id="rematchBtn">Rematch</button>
+            <button type="button" class="link" id="homeBtn">Back to base</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<dialog class="dlg" id="enlistDlg">
+  <form method="dialog" class="win" id="enlistForm">
+    <div class="win-bar"><i></i><i></i><i></i><span id="enlistTitle">enlist</span></div>
+    <div class="win-body">
+      <p class="big" id="enlistHead">Pick a callsign</p>
+      <p class="muted" id="enlistText">It is the name your opponents see and the one on the leaderboard.</p>
+      <label class="field"><span>Callsign</span><input id="enlistName" maxlength="16" autocomplete="username" required spellcheck="false"></label>
+      <label class="field" id="passField" hidden><span>Password</span><input id="enlistPass" type="password" maxlength="128" autocomplete="current-password"></label>
+      <p class="err" id="enlistErr" role="alert"></p>
+      <div class="row">
+        <button type="submit" class="btn" id="enlistGo" value="go">Enlist</button>
+        <button type="button" class="link" id="enlistSwap">I have a callsign</button>
+        <button type="button" class="link" value="cancel" id="enlistCancel">Cancel</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="dlg" id="secureDlg">
+  <form method="dialog" class="win" id="secureForm">
+    <div class="win-bar"><i></i><i></i><i></i><span>secure</span></div>
+    <div class="win-body">
+      <p class="big">Keep your callsign</p>
+      <p class="muted">Add a password to sign in on another device. Without one, your callsign lives in this browser only.</p>
+      <label class="field"><span>Password</span><input id="securePass" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></label>
+      <p class="err" id="secureErr" role="alert"></p>
+      <div class="row"><button type="submit" class="btn" value="go">Save</button><button type="button" class="link" data-close>Cancel</button></div>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="dlg wide" id="manualDlg">
+  <div class="win">
+    <div class="win-bar"><i></i><i></i><i></i><span>field.manual</span></div>
+    <div class="win-body manual">
+      <p class="big">How the war is fought</p>
+      <div class="legend">
+        <figure><img src="/logo-dead.png" alt="" width="72" height="72"><figcaption><b class="d">Dead</b>right digit, right place</figcaption></figure>
+        <figure><img src="/logo-injured.png" alt="" width="72" height="72"><figcaption><b class="i">Injured</b>right digit, wrong place</figcaption></figure>
+      </div>
+      <ol>
+        <li><b>Deploy.</b> Each side hides a code of four different digits. Nobody else ever sees yours.</li>
+        <li><b>Fire.</b> Take turns firing a guess at the enemy's code.</li>
+        <li><b class="d">Dead</b> is a right digit in the right place. <b class="i">Injured</b> is a right digit in the wrong place. You learn how many, never which.</li>
+        <li><b>Crack it.</b> Four dead cracks the code. If the side that fired first cracks it, the other side gets one last stand to draw level.</li>
+      </ol>
+      <div class="example">
+        <p class="eyebrow">Example</p>
+        <p>Their code <span class="tiles"><i>4</i><i>0</i><i>7</i><i>1</i></span> Your guess <span class="tiles"><i>1</i><i>0</i><i>2</i><i>4</i></span></p>
+        <p><b class="d">1 dead</b> (the 0) and <b class="i">2 injured</b> (the 1 and the 4).</p>
+      </div>
+      <p class="eyebrow">Supplies</p>
+      <p class="muted">Win the rock, paper, scissors draw for three crates, lose it for two and the first shot. One crate a turn:</p>
+      <ul class="supplies">
+        <li><b>Recon</b> tells you if a digit is in their code.</li>
+        <li><b>Sniper</b> tells you if a digit sits in one exact spot.</li>
+        <li><b>Smoke</b> hides your squad: their next volley only reports total hits.</li>
+      </ul>
+      <p class="muted">Keys: digits to aim, Backspace to clear, Enter to fire. Long press a key, or turn on Mark, to note digits you have ruled in or out.</p>
+      <div class="row"><button type="button" class="btn" data-close>Understood</button></div>
+    </div>
+  </div>
+</dialog>
+
+<dialog class="dlg" id="boardDlg">
+  <div class="win">
+    <div class="win-bar"><i></i><i></i><i></i><span>leaderboard</span></div>
+    <div class="win-body">
+      <p class="big">The decorated</p>
+      <table class="board"><thead><tr><th>#</th><th>Callsign</th><th>W</th><th>L</th><th title="Soldiers killed">KIA</th></tr></thead><tbody id="boardBody"></tbody></table>
+      <div class="row"><button type="button" class="btn" data-close>Close</button></div>
+    </div>
+  </div>
+</dialog>
+
+<dialog class="dlg" id="powerDlg">
+  <form method="dialog" class="win" id="powerForm">
+    <div class="win-bar"><i></i><i></i><i></i><span id="powerTag">recon</span></div>
+    <div class="win-body">
+      <p class="big" id="powerHead"></p>
+      <p class="muted" id="powerText"></p>
+      <div class="digits" id="powerDigits"></div>
+      <div class="spots" id="powerSpots"></div>
+      <div class="row"><button type="submit" class="btn" id="powerGo" value="go">Send</button><button type="button" class="link" data-close>Cancel</button></div>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="dlg" id="leaveDlg">
+  <form method="dialog" class="win">
+    <div class="win-bar"><i></i><i></i><i></i><span>retreat</span></div>
+    <div class="win-body">
+      <p class="big">Leave the field?</p>
+      <p class="muted" id="leaveText">Leaving now hands the win to your opponent.</p>
+      <div class="row"><button type="submit" class="btn" value="go">Leave</button><button type="button" class="link" data-close>Stay</button></div>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status"></div>
+<p class="vh" aria-live="polite" id="live"></p>
+
+<div class="pre" id="pre">
+  <div class="pre-in">
+    <p class="pre-title"><span>Dead &amp;</span><span>Injured</span></p>
+    <div class="pre-bar"><i id="preBar"></i></div>
+    <button type="button" class="btn enter" id="enterBtn" disabled>Loading the field</button>
+    <p class="pre-note">Best with sound on</p>
+  </div>
+</div>
+<script type="module" src="%APP%"></script>
+</body>
+</html>
