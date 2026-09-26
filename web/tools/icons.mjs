@@ -20,3 +20,10 @@ const box = [-pad - (1 - w) / 2, -pad, 1 + 2 * pad, 1 + 2 * pad].map(f).join(" "
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box}"><rect x="${f(-pad - (1 - w) / 2)}" y="${-pad}" width="${1 + 2 * pad}" height="${1 + 2 * pad}" rx="0.22" fill="#0c0d12"/><path fill="#f1ece6" fill-rule="evenodd" d="${blocks}"/><path fill="#e0442a" fill-rule="evenodd" d="${skull}"/></svg>\n`;
 writeFileSync(new URL("../static/favicon.svg", import.meta.url), svg);
 console.log("favicon.svg", svg.length, "bytes");
+
+// The flat mark for light backgrounds (the portfolio film's eyebrow): ink blocks, red skull.
+const glyph = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${f(w)} 1"><path fill="#0e0e0e" fill-rule="evenodd" d="${blocks}"/><path fill="#d8391f" fill-rule="evenodd" d="${skull}"/></svg>\n`;
+if (process.argv[2]) {
+  writeFileSync(process.argv[2], glyph);
+  console.log(process.argv[2], glyph.length, "bytes");
+}

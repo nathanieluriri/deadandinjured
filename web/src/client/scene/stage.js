@@ -5,7 +5,8 @@ const coarse = matchMedia("(pointer: coarse)").matches;
 
 export class Stage {
   constructor(canvas, { alpha = false } = {}) {
-    const cap = Math.min(window.devicePixelRatio || 1, coarse ? 1.5 : 1.75);
+    const film = /[?&]film\b/.test(location.search);
+    const cap = film ? window.devicePixelRatio || 1 : Math.min(window.devicePixelRatio || 1, coarse ? 1.5 : 1.75);
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: cap < 1.5 || alpha, alpha, powerPreference: "high-performance", stencil: false });
     this.alpha = alpha;
     this.renderer.setPixelRatio(cap);

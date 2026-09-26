@@ -6,6 +6,15 @@ export const TAUNTS = ["Salute", "Fire in the hole!", "Ha ha ha", "Good game", "
 const PHASE_MS = { supply: TIMES.supply, deploy: TIMES.deploy, battle: TIMES.turn };
 const $ = (id) => document.getElementById(id);
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const OUT = "cubic-bezier(0.16, 1, 0.3, 1)";
+const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+// One-shot effects run through the Web Animations API and cancel the previous run, so a
+// replay never stacks on a finished one.
+function play(el, frames, opts) {
+  el.__anim?.cancel();
+  el.__anim = el.animate(frames, { fill: "forwards", ...opts, duration: reduced() ? 1 : opts.duration });
+  return el.__anim;
+}
 
 export class MatchView {
   constructor(app) {
@@ -152,6 +161,7 @@ export class MatchView {
     this.animating = 0;
     this.offset = 0;
     this.oppOnline = true;
+    this.oppSeen = false;
     this.lastTick = -1;
     this.el.taunts.hidden = true;
     this.el.mineLog.innerHTML = "";
@@ -190,6 +200,7 @@ export class MatchView {
       case "restart": this.enqueue(() => this.restart()); break;
       case "assigned": this.enqueue(() => this.app.toast(`Out of time: HQ assigned your code, ${m.code}`)); break;
       case "picked": this.sfx.play("click"); this.note(`<b>${this.oppName}</b> has picked`); break;
+      case "joined": this.app.toast(`${m.name} joined the room`); break;
       case "ready": this.sfx.play("lock", { far: 0.8 }); this.app.toast(`${this.oppName} has deployed their code`); break;
       case "rematch": this.app.toast(`${this.oppName} wants a rematch`); this.sfx.play("radio"); break;
       case "taunt": this.showTaunt(m.id, "opp"); break;
@@ -338,19 +349,23 @@ export class MatchView {
 
   async playVolley(v) {
     this.animating++;
+    this.volleyBy = v.by;
     this.refresh();
     this.note("");
     if (v.by === "me") {
-      this.el.slots.classList.add("fly");
-      await wait(0.5);
-      this.el.slots.classList.remove("fly");
+      for (const [i, el] of this.slotEls.entries()) {
+        play(el, [{ transform: "none", opacity: 1 }, { transform: "translateY(-160px) scale(0.6)", opacity: 0 }], { duration: 550, delay: i * 40, easing: "cubic-bezier(0.65, 0, 0.35, 1)" });
+      }
+      await wait(0.7);
       this.input = "";
       this.renderSlots();
+      for (const el of this.slotEls) el.__anim?.cancel();
     }
     this.dir.on("result", (r) => this.stampVolley(r));
     this.dir.on("hurt", (k) => this.hurt(k));
     await this.dir.volley(v);
     this.dir.on("result", null);
+    this.volleyBy = null;
     this.animating--;
     this.firing = false;
     this.refresh();
@@ -471,24 +486,22 @@ export class MatchView {
   }
 
   hurt(k) {
-    const h = document.querySelector(".hurt");
-    h.style.opacity = "";
-    h.classList.remove("on");
-    void h.offsetWidth;
-    h.style.setProperty("--k", Math.min(1, k));
-    h.classList.add("on");
+    play(document.querySelector(".hurt"), [{ opacity: Math.min(1, k) }, { opacity: 0 }], { duration: 900, easing: OUT });
     navigator.vibrate?.(k > 0.6 ? 40 : 15);
   }
 
   stamp(big, small = "", plain = false, short = false) {
     const st = this.el.stamp;
+    st.dataset.n = String(Number(st.dataset.n || 0) + 1);
     st.querySelector("b").textContent = big;
     st.querySelector("span").textContent = small;
-    st.classList.remove("on", "plain", "short");
-    void st.offsetWidth;
     st.classList.toggle("plain", plain);
-    st.classList.toggle("short", short);
-    st.classList.add("on");
+    play(st, [
+      { opacity: 0, transform: "scale(1.7) rotate(-7deg)", easing: OUT },
+      { opacity: 1, transform: "scale(1) rotate(-3deg)", offset: 0.12, easing: OUT },
+      { opacity: 1, transform: "scale(0.98) rotate(-3deg)", offset: 0.8, easing: OUT },
+      { opacity: 0, transform: "scale(0.94) rotate(-3deg)" },
+    ], { duration: short ? 1100 : 2100 });
   }
 
   // The logo variants land with the stamp: the skull for dead, the bandage for injured.
@@ -502,7 +515,7 @@ export class MatchView {
     const both = dead && injured;
     if (dead) {
       hud.place("dead", both ? cx - size * 0.62 : cx, y, size);
-      hud.stamp("dead", { spin: cracked, hold: cracked ? 2.4 : 1.6 });
+      hud.stamp("dead", { spin: cracked, hold: cracked ? 1.9 : 1.6 });
     }
     if (injured) {
       hud.place("injured", both ? cx + size * 0.62 : cx, y, size);
@@ -542,8 +555,12 @@ export class MatchView {
     this.oppOnline = on;
     this.el.oppDot.classList.toggle("off", !on);
     this.el.oppDot.title = on ? "Online" : "Offline";
-    if (was && !on && this.s?.opp) this.app.toast(`${this.oppName}'s radio went quiet`);
-    if (!was && on && this.s?.opp) this.app.toast(`${this.oppName} is back on the radio`);
+    if (this.solo || !this.oppSeen) {
+      if (on) this.oppSeen = true;
+      return;
+    }
+    if (was && !on) this.app.toast(`${this.oppName}'s radio went quiet`);
+    if (!was && on) this.app.toast(`${this.oppName} is back on the radio`);
   }
 
   // ---- input --------------------------------------------------------------------------------
@@ -559,9 +576,7 @@ export class MatchView {
     if (this.markMode) return this.cycleMark(d);
     if (!this.canType()) return;
     if (this.input.includes(d)) {
-      this.el.slots.classList.remove("shake");
-      void this.el.slots.offsetWidth;
-      this.el.slots.classList.add("shake");
+      play(this.el.slots, [0, -6, 5, -4, 2, 0].map((x) => ({ transform: `translateX(${x}px)` })), { duration: 360, fill: "none" });
       this.sfx.play("error");
       return this.app.toast("Each digit only once");
     }
@@ -684,11 +699,7 @@ export class MatchView {
       const ch = this.input[i] || "";
       if (el.textContent !== ch) {
         el.textContent = ch;
-        if (pop && ch) {
-          el.classList.remove("pop");
-          void el.offsetWidth;
-          el.classList.add("pop");
-        }
+        if (pop && ch) play(el, [{ transform: "translateY(-10px) scale(1.18)" }, { transform: "none" }], { duration: 320, easing: OUT, fill: "none" });
       }
     });
     for (const [d, b] of this.keys) b.classList.toggle("used", this.input.includes(d));
@@ -721,7 +732,7 @@ export class MatchView {
     if (s.phase === "battle") {
       e.turn.classList.toggle("mine", my);
       e.turn.classList.toggle("last", !!s.lastStand);
-      if (busy) e.turnLabel.textContent = "Incoming";
+      if (this.volleyBy) e.turnLabel.textContent = this.volleyBy === "me" ? "Firing" : "Incoming";
       else if (s.lastStand) e.turnLabel.textContent = my ? "Last stand: your shot" : "Last stand";
       else e.turnLabel.textContent = my ? "Your shot" : `${this.oppName}'s shot`;
     } else {

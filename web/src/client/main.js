@@ -50,6 +50,7 @@ class App {
   }
 
   async boot() {
+    if (/[?&]film\b/.test(location.search)) document.documentElement.classList.add("film");
     grain();
     this.progress(0.08);
     await frame();
@@ -92,7 +93,7 @@ class App {
     const enter = $("enterBtn");
     enter.disabled = false;
     enter.textContent = "Enter the field";
-    enter.focus({ preventScroll: true });
+    if (fine) enter.focus({ preventScroll: true });
     (window.requestIdleCallback || setTimeout)(() => this.director.prebuildWords());
   }
 
@@ -417,6 +418,7 @@ class App {
     $("roomCode").textContent = code;
     $("waitState").textContent = "waiting";
     if (host) this.show("wait");
+    if (this.director.titleGroup.visible) this.director.titleOut();
     this.director.shot("home", 1.4);
     const view = this.view;
     view.start(null, { solo: false });
@@ -453,6 +455,7 @@ class App {
   async quick() {
     if (!(await this.needCallsign())) return;
     this.show("search");
+    if (this.director.titleGroup.visible) this.director.titleOut();
     this.director.shot("far", 1.6);
     $("searchText").textContent = "Scanning for an opponent";
     $("searchState").textContent = "scanning";

@@ -20,7 +20,7 @@ const SHOTS = {
   title: { pos: [0, 2.8, 21], look: [0, 7.2, -16], fov: 44, kp: 1.3 },
   home: { pos: [0, 4.4, 17.2], look: [0, 1.1, -5], fov: 40, kp: 1.45 },
   deploy: { pos: [0, 2.9, 15.4], look: [0, 1.05, 9.6], fov: 38 },
-  supply: { pos: [0, 4.4, 4.5], look: [0, 4.6, -7], fov: 42 },
+  supply: { pos: [0, 4.4, 2.6], look: [0, 4.4, -7], fov: 44, kp: 1.3 },
   launch: { pos: [8.8, 2.3, 11.2], look: [2.6, 3.2, -6], fov: 42 },
   enemyFront: { pos: [0.8, 3.1, -6.6], look: [0, 1.2, -18.5], fov: 40 },
   sky: { pos: [0.4, 1.5, 12.5], look: [0, 7.2, -8], fov: 46 },
@@ -278,7 +278,8 @@ export class Director {
       r.group.visible = on;
       r.fist.visible = on;
       for (const k of ["rock", "paper", "scissors"]) r[k].visible = false;
-      r.group.position.set(side === "me" ? -2.2 : 2.2, 4.4, -6.5);
+      const spread = this.stage.aspect < 0.9 ? 1.35 : 2.2;
+      r.group.position.set(side === "me" ? -spread : spread, 4.4, -6.5);
       r.group.rotation.set(0, 0, 0);
       r.group.scale.setScalar(1);
     }

@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { newGame, join, act, tick, view } from "../shared/game.js";
+import { newGame, join, act, tick, view, TIMES } from "../shared/game.js";
 
 const IDLE = 30 * 60e3;
 const AFTER = 10 * 60e3;
@@ -12,6 +12,12 @@ export class Room extends DurableObject {
     super(ctx, env);
     this.g = undefined;
     this.rate = new Map();
+    // Local filming only: frame-exact capture runs far slower than real time.
+    const scale = Number(env.TIME_SCALE);
+    if (scale > 1 && !TIMES.scaled) {
+      for (const k of ["lobby", "supply", "deploy", "turn"]) TIMES[k] *= scale;
+      TIMES.scaled = true;
+    }
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"t":"ping"}', '{"t":"pong"}'));
   }
 
