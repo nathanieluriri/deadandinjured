@@ -279,6 +279,7 @@ class Soldier {
 
   // Gives in: the rifle goes down, he drops to one knee and puts his hands up.
   surrender(delay = 0) {
+    if (this.state === "rise") return void (this.next = () => this.surrender(delay));
     if (!this.alive) return;
     this.set("surrender");
     this.gaveUp = false;
@@ -286,6 +287,7 @@ class Soldier {
   }
 
   cheer(hold = 3.5) {
+    if (this.state === "rise") return void (this.next = () => this.cheer(hold));
     if (!this.alive || this.state === "wounded") return;
     this.set("cheer");
     this.cheerFor = hold;
@@ -328,6 +330,7 @@ class Soldier {
   }
 
   respawn(delay = 0) {
+    this.next = null;
     this.set("rise");
     this.t = -delay;
     this.risen = false;
@@ -441,6 +444,9 @@ class Soldier {
         if (this.risen && done) {
           this.set("idle");
           this.stance(0.25);
+          const next = this.next;
+          this.next = null;
+          next?.();
         }
         break;
       }

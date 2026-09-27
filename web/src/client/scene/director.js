@@ -600,7 +600,11 @@ export class Director {
       const victor = other(loser);
       const home = loser === "me" ? "surrender" : "victory";
       this.shot(home, 1.9, "power2.inOut");
-      await wait(0.9);
+      // A code is cracked by four dead: the rest of the company climbs up out of the trench to
+      // give in, and the winners come back to full strength to see it.
+      const fallen = ["me", "opp"].map((side) => this.army.squad(side).some((x) => !x.alive));
+      for (const side of ["me", "opp"]) this.reinforce(side);
+      await wait(fallen.some(Boolean) ? 1.9 : 0.9);
       for (const s of this.army.squad(loser)) s.surrender(rnd(0, 0.7));
       for (const s of this.army.squad(victor)) wait(rnd(0.2, 0.7)).then(() => s.cheer(40));
       const flag = this.whiteFlags[loser];
