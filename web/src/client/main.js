@@ -163,9 +163,11 @@ class App {
       let bottom = 0;
       let top = 0;
       const b = document.body;
+      // A cinematic frames the whole screen and restores the layout when it ends.
+      if (b.classList.contains("cine")) return;
       if (this.screen === "match") {
-        const dock = $("dock");
-        if (b.classList.contains("phase-deploy") || b.classList.contains("phase-battle")) bottom = dock.getBoundingClientRect().height * (innerWidth < 900 ? 0.9 : 0.55);
+        // Measured to the top of the aim pane whichever pane is open, so switching tabs never moves the camera.
+        if (b.classList.contains("phase-deploy") || b.classList.contains("phase-battle")) bottom = ($("dock").getBoundingClientRect().bottom - $("paneAim").getBoundingClientRect().top + 14) * (innerWidth < 900 ? 0.9 : 0.55);
         else if (b.classList.contains("phase-supply")) bottom = $("rps").getBoundingClientRect().height + 20;
         else if (b.classList.contains("phase-over")) bottom = innerWidth < 900 ? 220 : 0;
         top = innerWidth < 900 ? 100 : 50;

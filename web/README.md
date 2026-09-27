@@ -16,11 +16,12 @@ What carries over from the original: callsigns with optional passwords, create a
 | `src/shared/game.js` | The match engine, pure functions shared by the rooms and by matches against the computer in the browser. A player's code never leaves the server until the match ends. |
 | `schema.sql` | D1 (SQLite): players, sessions, finished matches. |
 | `src/client/scene/` | The three.js field: terrain, sky, the soldiers and the set dressing, effects, the camera director and the 3D title. |
-| `src/client/scene/army.js` | Eight rigged soldiers: skinned meshes driven by an animation mixer (idle, aim, duck, hit, death, wave, jump), each side in its own uniform. Helmets and rifles are instanced; a hit knocks them off and they tumble to rest on the field. |
+| `src/client/scene/army.js` | Eight rigged soldiers: skinned meshes driven by an animation mixer (idle, aim, duck, hit, death, wave, taunt, jump), each side in its own uniform. Helmets and rifles are instanced; a hit knocks them off and they tumble to rest on the field. |
+| `src/client/scene/director.js` | The camera and the moments: volleys, the supply draw, and the supplies' own scenes. Recon sends a spotter plane (`plane.js`) over their trench to drop a green or red flare; the sniper looks through a scope at the soldier in the chosen spot, and a soldier who survives the shot taunts you. |
 | `src/client/scene/stage.js` | The renderer. The drawing buffer is only resized right before a render, since a resize clears it and a cleared buffer on screen is a black frame; resolution adapts to the frame rate in quarter steps, and a lost WebGL context is rebuilt. |
 | `src/client/scene/logo.js` | The portfolio's block logo with a symbol in its fourth block: a skull for dead, a bandage for injured. They frame the title while the field loads and land above every volley's result. |
 | `src/client/audio.js` | Every sound is synthesised with Web Audio (cannons, whistles, the death knell, bugles, wind), so there are no audio files to download. |
-| `src/client/match.js` | The match screen: plays the server's events as animations in order, the keypad, supplies, logs and timers. |
+| `src/client/match.js` | The match screen: plays the server's events as animations in order. The dock under the field switches between the keypad, the supply cards and the log (on desktop the log is a side window), so one thing is on screen at a time; the turn banner fades once read and comes back only if you sit idle. |
 
 ## Run it
 

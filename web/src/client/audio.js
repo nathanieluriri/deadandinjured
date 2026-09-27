@@ -603,6 +603,43 @@ export class Sfx {
     this.hiss(t + 0.08, out, { type: "highpass", f: 2800, a: 0.15, peak: 0.45, d: 2.2 });
   }
 
+  // A spotter plane passing overhead: two detuned saws under a lowpass that opens as it nears.
+  s_plane(o, t) {
+    const dur = o.dur || 3.6;
+    const out = this.out(o, t, { verb: 0.35, gain: 0.55 });
+    const lp = this.filter("lowpass", 380, 1.1);
+    lp.frequency.setValueAtTime(380, t);
+    lp.frequency.linearRampToValueAtTime(1500, t + dur * 0.5);
+    lp.frequency.linearRampToValueAtTime(420, t + dur);
+    const v = this.ctx.createGain();
+    v.gain.setValueAtTime(0.0001, t);
+    v.gain.exponentialRampToValueAtTime(0.5, t + dur * 0.45);
+    v.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    const am = this.ctx.createGain();
+    am.gain.value = 0.8;
+    lp.connect(am).connect(v).connect(out);
+    this.osc("sawtooth", 96, t, dur, lp, { to: 78, curve: "lin" });
+    this.osc("sawtooth", 144, t, dur, lp, { to: 116, curve: "lin", detune: 9 });
+    const flutter = this.ctx.createOscillator();
+    flutter.frequency.value = 23;
+    const fg = this.ctx.createGain();
+    fg.gain.value = 0.2;
+    flutter.connect(fg).connect(am.gain);
+    flutter.start(t);
+    flutter.stop(t + dur);
+  }
+
+  s_shutter(o, t) {
+    const out = this.out(o, t, { verb: 0.2, gain: 0.5 });
+    for (const d of [0, 0.07]) this.hiss(t + d, out, { type: "bandpass", f: 3800, q: 3, peak: 0.7, d: 0.025 });
+  }
+
+  s_flare(o, t) {
+    const out = this.out(o, t, { verb: 0.45, gain: 0.5 });
+    this.thump(t, out, 240, 90, 0.08, 0.5);
+    this.hiss(t + 0.05, out, { type: "bandpass", f: 2600, q: 0.8, a: 0.1, peak: 0.35, d: 1.6 });
+  }
+
   s_fanfare(o, t) {
     const out = this.out(o, t, { verb: 0.55, gain: 0.9 });
     const seq = [[NOTE.C4, 0, 0.13], [NOTE.C4, 0.14, 0.13], [NOTE.C4, 0.28, 0.13], [NOTE.E4, 0.42, 0.42], [NOTE.C4, 0.86, 0.22], [NOTE.E4, 1.1, 0.22], [NOTE.G4, 1.34, 1.4]];

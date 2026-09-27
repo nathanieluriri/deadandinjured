@@ -236,6 +236,34 @@ class Soldier {
     if (this.helmet.on) this.knock(this.helmet, 0.6, rand(3.2, 4.2), 7);
   }
 
+  // Survived a sniper's miss: shakes his head at you.
+  taunt() {
+    if (!this.alive || !["idle", "shot", "flinch"].includes(this.state)) return;
+    this.set("taunt");
+    this.play("No", { fade: 0.2, loop: false, speed: 1.15 });
+  }
+
+  // A sniper's round finds him: the helmet goes, he reels, he stays up.
+  shot(dir) {
+    if (!this.alive) return;
+    this.set("shot");
+    this.flash = 1;
+    this.play("HitReact", { fade: 0.05, loop: false, speed: 0.9 });
+    if (this.helmet.on) this.knock(this.helmet, 1.1, rand(3.8, 4.8), 8, dir);
+  }
+
+  // A near miss: he flinches and carries on.
+  flinch() {
+    if (!this.alive || this.state !== "idle") return;
+    this.set("flinch");
+    this.play("HitReact", { fade: 0.06, loop: false, speed: 1.25 });
+  }
+
+  // Just above his head, where speech bubbles and sights go.
+  above(out = new THREE.Vector3(), lift = 0.55) {
+    return out.setFromMatrixPosition(this.bones.head.matrixWorld).setY(out.y + lift);
+  }
+
   cheer() {
     if (!this.alive || this.state === "wounded") return;
     this.set("cheer");
@@ -352,6 +380,9 @@ class Soldier {
           this.stance();
         }
         break;
+      case "taunt":
+      case "shot":
+      case "flinch":
       case "salute":
         if (done) {
           this.set("idle");

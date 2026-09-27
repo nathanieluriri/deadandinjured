@@ -14,7 +14,7 @@ const src = process.argv[2];
 if (!src) throw new Error("usage: node tools/soldier.mjs path/to/Character_Soldier.gltf");
 const out = process.argv.find((a) => a.endsWith(".glb")) || path.resolve(path.dirname(new URL(import.meta.url).pathname), "../models/soldier.glb");
 
-const CLIPS = ["Idle", "Idle_Shoot", "Duck", "HitReact", "Death", "Wave", "Yes", "Jump_Idle", "Jump_Land", "Run"];
+const CLIPS = ["Idle", "Idle_Shoot", "Duck", "HitReact", "Death", "Wave", "No", "Jump_Idle", "Jump_Land"];
 const PART = {
   body: { Skin: 0, DarkGrey: 1, Pants: 2, Character_Main: 3, Black: 4 },
   hood: 5,

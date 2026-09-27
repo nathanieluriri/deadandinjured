@@ -3,6 +3,7 @@ import { gsap } from "gsap/gsap-core";
 import { SIDES, groundHeight } from "./palette.js";
 import { glyph, word, clay, CodeBlocks } from "./type3d.js";
 import { buildRps } from "./rps.js";
+import { buildPlane } from "./plane.js";
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const wait = (s) => new Promise((r) => gsap.delayedCall(s, r));
@@ -56,6 +57,20 @@ export class Director {
       stage.scene.add(m);
       return m;
     });
+
+    this.planes = { me: buildPlane(SIDES.me.clay, 0x2b2622), opp: buildPlane(SIDES.opp.clay, 0xf2e8d8) };
+    for (const p of Object.values(this.planes)) {
+      p.visible = false;
+      stage.scene.add(p);
+    }
+    this.beam = new THREE.Mesh(
+      new THREE.ConeGeometry(2.4, 1, 28, 1, true).translate(0, -0.5, 0),
+      new THREE.MeshBasicMaterial({ color: 0xfff0c4, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }),
+    );
+    this.beam.visible = false;
+    stage.scene.add(this.beam);
+    this.sway = 0;
+    this.follow = null;
 
     this.titleMat = clay(0xf4efe6, 0.4);
     this.titleMat.emissive.setHex(0x221e1a);
@@ -129,6 +144,16 @@ export class Director {
     });
   }
 
+  // A camera move to any framing, for the moments that follow one soldier or one plane.
+  move(pos, look, fov, dur = 1, ease = "power3.inOut") {
+    gsap.killTweensOf([this.pos, this.look, this]);
+    return new Promise((done) => {
+      gsap.to(this.pos, { x: pos.x, y: pos.y, z: pos.z, duration: dur, ease });
+      gsap.to(this.look, { x: look.x, y: look.y, z: look.z, duration: dur, ease });
+      gsap.to(this, { fov, duration: dur, ease, onComplete: done });
+    });
+  }
+
   shake(a) {
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) a *= 0.25;
     this.shakeAmt = Math.min(1.2, Math.max(this.shakeAmt, a));
@@ -150,6 +175,7 @@ export class Director {
     this.time += dt;
     this.shakeAmt *= Math.exp(-dt * 5);
     const t = this.time;
+    if (this.follow) this.look.lerp(this.follow.position, 1 - Math.exp(-dt * 10));
     const h = this.handheld;
     const orbit = this.name === "title" ? Math.sin(t * 0.08) * 3.2 : 0;
     const sx = (Math.sin(t * 31.1) + Math.sin(t * 17.3)) * 0.5 * this.shakeAmt * 0.35;
@@ -159,7 +185,8 @@ export class Director {
       this.pos.y + Math.sin(t * 0.51) * 0.06 * h + sy,
       this.pos.z + Math.cos(t * 0.29) * 0.08 * h,
     );
-    this.cam.lookAt(this.look.x + sx * 0.4, this.look.y + sy * 0.4, this.look.z);
+    const sw = this.sway;
+    this.cam.lookAt(this.look.x + sx * 0.4 + Math.sin(t * 1.7) * sw, this.look.y + sy * 0.4 + Math.sin(t * 2.3 + 1) * sw * 0.6, this.look.z);
     if (Math.abs(this.cam.fov - this.fov) > 0.01) {
       this.cam.fov = this.fov;
       this.cam.updateProjectionMatrix();
@@ -585,5 +612,164 @@ export class Director {
 
   smoke(side, on) {
     this.fx.screen(V(0, 0, SIDES[side].z), on);
+  }
+
+  // ---- Supplies ---------------------------------------------------------------------------
+
+  // Your sniper: through the scope onto the soldier standing in that spot of their line. A hit
+  // takes his helmet; a miss chews the sandbags and he lets you know about it.
+  async sniper({ by, spot, hit }) {
+    if (by !== "me") return this.sniped();
+    const target = this.army.squad("opp")[spot];
+    const shooter = this.army.squad("me").filter((s) => s.alive).sort((a, b) => Math.abs(a.home.x - target.home.x) - Math.abs(b.home.x - target.home.x))[0];
+    shooter?.aim(true);
+    const aimAt = target.above(V(), 0.05);
+    const eye = V(target.home.x * 0.35, 2.9, 8.6);
+    // Frame about 2.7 units of him inside the scope's circle, however big the circle is here.
+    const circle = Math.min(innerWidth * 0.88, innerHeight * 0.72) / innerHeight;
+    const fov = THREE.MathUtils.radToDeg(2 * Math.atan(1.35 / circle / eye.distanceTo(aimAt)));
+    this.stage.setInset(0, 0);
+    this.emit("scope", { on: true, spot });
+    this.sfx.play("aim");
+    await this.move(eye, aimAt, fov, 1.1, "power3.inOut");
+    gsap.fromTo(this, { sway: 0.1 }, { sway: 0.008, duration: 1.3, ease: "power2.out" });
+    await wait(1.2);
+    this.sfx.play("sniper");
+    await wait(0.36);
+    this.emit("scope", { kick: true });
+    this.shake(0.3);
+    await wait(0.06);
+    if (hit) {
+      target.shot(V(rnd(-0.3, 0.3), 0, -1));
+      this.fx.spray(target.above(V(), 0), 8, 0x6b6f76, 3.5, 0.45);
+      this.sfx.play("impact", { far: 0.55 });
+      await wait(1.5);
+    } else {
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const puff = V(target.home.x + side * rnd(0.35, 0.7), rnd(0.45, 0.75), target.home.z + 1.25);
+      this.fx.dust(puff, 6, 0.55);
+      this.fx.spray(puff, 6, 0x75664a, 2.5, 0.5);
+      this.sfx.play("ricochet", { far: 0.5, pan: side * 0.3 });
+      await wait(0.45);
+      target.taunt();
+      this.emit("say", { soldier: target, text: ["Missed me!", "Is that all?", "Try again!", "Not even close"][Math.floor(rnd(0, 4))], ms: 2200 });
+      this.sfx.play("taunt", { id: 2, far: 0.55 });
+      await wait(1.9);
+    }
+    this.emit("scope", { on: false });
+    this.sway = 0;
+    shooter?.aim(false);
+    await this.shot("home", 1.0);
+  }
+
+  // Their sniper: a glint on their line, a crack, dirt kicked up beside one of yours.
+  async sniped() {
+    const pick = (list) => list[Math.floor(Math.random() * list.length)];
+    const shooter = pick(this.army.squad("opp").filter((s) => s.alive));
+    const victim = pick(this.army.squad("me").filter((s) => s.alive));
+    if (shooter) {
+      const at = shooter.above(V(), -0.15).add(V(0, 0, 0.35));
+      for (const d of [0, 0.5]) this.fx.fire.spawn({ pos: at, s0: 0.2, s1: 1.1, c0: new THREE.Color(0xffffff), c1: new THREE.Color(0xfff2c0), a0: 1, a1: 0, life: 0.3, delay: d });
+    }
+    this.sfx.play("sniper", { far: 0.45 });
+    await wait(0.62);
+    if (victim) {
+      this.fx.dust(victim.home.clone().add(V(rnd(-0.6, 0.6), 0.5, -1.2)), 6, 0.6);
+      this.sfx.play("ricochet", { pan: this.pan(victim.pos) });
+      victim.flinch();
+    }
+    this.shake(0.2);
+    await wait(1.2);
+  }
+
+  // Recon: a spotter plane crosses their trench, photographs the code crate and drops a flare,
+  // green if the digit is in their code and red if not. Theirs crosses yours and learns in secret.
+  async recon({ by, found }) {
+    const mine = by === "me";
+    const plane = this.planes[mine ? "me" : "opp"];
+    // Theirs flies low enough to cross the top of the home shot as it buzzes your line.
+    const a = mine ? V(-52, 11.5, -13) : V(46, 7.4, 15);
+    const b = mine ? V(52, 10.5, -29) : V(-46, 6.8, -1);
+    const crate = mine ? V(0, 0, SIDES.opp.z + SIDES.opp.dir * 4.2) : V(0, 0, SIDES.me.z + SIDES.me.dir * 4.2);
+    const dur = 3.8;
+    const dirV = b.clone().sub(a).normalize();
+    if (mine) {
+      this.stage.setInset(0, 0);
+      await this.move(V(-4, 2.4, -7), V(-30, 10.5, -16), 56, 0.8);
+      this.follow = plane;
+    } else wait(dur * 0.36).then(() => { for (const s of this.army.squad("me")) wait(rnd(0, 0.2)).then(() => s.duck()); });
+    plane.visible = true;
+    plane.position.copy(a);
+    this.sfx.play("plane", { dur: dur + 0.4 });
+    let snapped = false;
+    let flare = null;
+    let burning = null;
+    const st = { t: 0 };
+    const prop = plane.userData.prop;
+    const beam = this.beam;
+    await new Promise((done) => gsap.to(st, {
+      t: 1, duration: dur, ease: "none", onComplete: done,
+      onUpdate: () => {
+        const p = a.clone().lerp(b, st.t);
+        p.y -= Math.sin(st.t * Math.PI) * 1.4;
+        plane.position.copy(p);
+        plane.lookAt(p.clone().add(dirV));
+        plane.rotateZ(Math.sin(st.t * Math.PI * 2) * 0.14);
+        prop.rotation.z += 0.9;
+        const over = Math.abs(p.x - crate.x);
+        if (over < 6) {
+          beam.visible = true;
+          beam.position.copy(p);
+          beam.scale.set(1, p.y - 0.2, 1);
+          beam.material.opacity = 0.32 * Math.max(0, 1 - over / 6);
+          if (!snapped && over < 1.2) {
+            snapped = true;
+            this.fx.fire.spawn({ pos: p, s0: 2.5, s1: 6, c0: new THREE.Color(0xffffff), c1: new THREE.Color(0xfff4d8), a0: 1, a1: 0, life: 0.22 });
+            this.fx.flashLight(crate.clone().setY(1), 0.6);
+            this.sfx.play("shutter");
+          }
+        } else beam.visible = false;
+        if (mine && !flare && p.x > crate.x + 3) {
+          flare = { pos: p.clone().add(V(0, -0.6, 0)), vel: dirV.clone().multiplyScalar(6).setY(-1), color: new THREE.Color(found ? 0x74ff8a : 0xff5a3c) };
+          this.sfx.play("flare");
+          burning = this.burnFlare(flare, found);
+        }
+      },
+    }));
+    beam.visible = false;
+    plane.visible = false;
+    await burning;
+    this.follow = null;
+    if (mine) await this.shot("home", 1.0);
+    else await wait(0.4);
+  }
+
+  // A parachute flare drifting down, lighting the field in its colour.
+  burnFlare(f, found) {
+    const light = this.world.flash;
+    const base = light.color.getHex();
+    light.color.setHex(found ? 0x5cff78 : 0xff4630);
+    this.follow = { position: f.pos };
+    gsap.to(this, { fov: 30, duration: 1.6, ease: "power2.out" });
+    const st = { t: 0 };
+    let last = 0;
+    return new Promise((done) => gsap.to(st, {
+      t: 2.4, duration: 2.4, ease: "none",
+      onUpdate: () => {
+        const dt = st.t - last;
+        last = st.t;
+        f.vel.multiplyScalar(Math.exp(-dt * 2.2));
+        f.vel.y = Math.max(f.vel.y - dt * 0.6, -1.3);
+        f.pos.addScaledVector(f.vel, dt);
+        this.fx.fire.spawn({ pos: f.pos, s0: 2.4, s1: 0.6, c0: f.color, c1: f.color, a0: 1, a1: 0, life: 0.18 });
+        this.fx.smoke.spawn({ pos: f.pos.clone(), vel: V(0, 0.4, 0), s0: 0.3, s1: 1.2, c0: new THREE.Color(0x8a8078), c1: new THREE.Color(0xb0a89e), a0: 0.35, a1: 0, life: 1.6, drag: 1 });
+        light.position.copy(f.pos);
+        light.intensity = 26 * (0.85 + Math.sin(st.t * 40) * 0.15);
+      },
+      onComplete: () => {
+        light.color.setHex(base);
+        done();
+      },
+    }));
   }
 }
