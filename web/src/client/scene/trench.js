@@ -101,13 +101,12 @@ export function duckboard(len = 2, w = 0.7) {
 }
 
 // A dugout's entrance: a timber frame with a lintel, and the gas curtain hung across it,
-// drawn aside so the way in shows dark.
+// drawn aside.
 export function doorway(w = 1.1, h = 1.7) {
   const parts = [
     [box(0.16, h, 0.16, 0.02).translate(-w / 2, h / 2, 0), T.post],
     [box(0.16, h, 0.16, 0.02).translate(w / 2, h / 2, 0), T.post],
     [box(w + 0.5, 0.18, 0.2, 0.02).translate(0, h + 0.09, 0), T.post],
-    [box(w, h, 0.05, 0.01).translate(0, h / 2, -0.25), 0x16120f],
   ];
   // The curtain, gathered to one side in folds.
   for (let i = 0; i < 4; i++) {

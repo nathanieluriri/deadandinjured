@@ -721,6 +721,7 @@ export class Director {
     this.setCode("", { side: "opp", sound: false });
     this.setCode("", { sound: false });
     this.codes.me.group.visible = false;
+    if (this.army.paraded) this.onParadeEnd?.();
     this.army.reset();
     this.army.hidden.opp = false;
     this.army.hidden.me = false;

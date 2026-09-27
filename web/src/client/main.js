@@ -1,6 +1,7 @@
 import { gsap } from "gsap/gsap-core";
 import { Stage } from "./scene/stage.js";
 import { World, loadProps } from "./scene/world.js";
+import { Network } from "./scene/network.js";
 import { Army, loadSoldier } from "./scene/army.js";
 import { Fx } from "./scene/fx.js";
 import { Director } from "./scene/director.js";
@@ -85,6 +86,9 @@ class App {
     $("pre").classList.add("live");
     this.world = new World(this.stage);
     this.world.dress(await props);
+    this.network = new Network(this.world.scene);
+    await this.network.build();
+    this.stage.hooks.push((dt) => this.network.update(dt));
     this.progress(0.4);
     await frame();
     this.army = new Army(this.stage, await soldier);
@@ -96,6 +100,7 @@ class App {
     this.progress(0.6);
     await frame();
     this.director = new Director({ stage: this.stage, world: this.world, army: this.army, fx: this.fx, sfx: this.sfx });
+    this.director.onParadeEnd = () => this.parade(false);
     this.director.applyShot("title", true);
     this.director.titleShow(true);
     this.fx.warm();
@@ -473,6 +478,7 @@ class App {
     this.show("menu");
     this.view.stop();
     this.director.resetField();
+    this.parade(true);
     this.director.rpsShow(false);
     this.director.shot("title", first ? 0.01 : 1.6);
     if (first || !this.director.titleGroup.visible) this.director.titleIn();
@@ -480,6 +486,12 @@ class App {
     for (const s of document.querySelectorAll(".sub")) s.hidden = true;
     for (const i of document.querySelectorAll("#menu [data-open]")) i.setAttribute("aria-expanded", "false");
     if (location.pathname !== "/") history.replaceState(null, "", "/");
+  }
+
+  // The enemy commanders stand on their parapet only while the title is up.
+  parade(on) {
+    this.army.parade(on);
+    this.network.parade(on);
   }
 
   home() {

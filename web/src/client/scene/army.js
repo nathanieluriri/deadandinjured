@@ -4,6 +4,7 @@ import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { clone as cloneRig } from "three/addons/utils/SkeletonUtils.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { SIDES, groundHeight } from "./palette.js";
+import { tint, join } from "./kit.js";
 
 const N = 8;
 const GRAVITY = 15;
@@ -620,12 +621,44 @@ export class Army {
     this.a = new THREE.Vector3();
     this.b = new THREE.Vector3();
     this.hidden = { me: false, opp: false };
+    this.ranks = rankKit(kit.helmet.scale);
+    for (const mesh of Object.values(this.ranks)) stage.scene.add(mesh);
     stage.hooks.push((dt, time) => this.update(dt, time));
     this.update(0, 0);
   }
 
+  // The title's enemy commanders: three of their squad up on the parapet, dressed by rank, and
+  // the fourth stood down. Off, they go back to their places as ordinary soldiers.
+  parade(on) {
+    const squad = this.squads.opp;
+    RANKS.forEach((rank, i) => {
+      const s = squad[i];
+      s.rank = on ? rank : null;
+      s.pos.set(on ? -2.4 + i * 2.4 : s.home.x, on ? 0.7 : 0, on ? -16.75 : s.home.z);
+    });
+    squad[3].scale = on ? 0 : 1;
+    this.paraded = on;
+  }
+
   on(name, fn) {
     (this.listeners[name] ||= []).push(fn);
+  }
+
+  // Places a commander's rank on him: a cap in the helmet's place, badges on the arms or chest.
+  dress(s) {
+    const { m } = this;
+    const r = this.ranks;
+    s.helmetMatrix(m);
+    if (s.rank.cap) {
+      const cap = r[s.rank.cap];
+      cap.matrix.copy(m);
+      cap.visible = true;
+    }
+    for (const [key, bone, side] of s.rank.badges || []) {
+      const b = r[`${key}${side || ""}`];
+      b.matrix.copy(m).multiply(tmpM.makeTranslation(...BADGE_AT[bone](side)));
+      b.visible = true;
+    }
   }
 
   emit(name, s) {
@@ -634,6 +667,7 @@ export class Army {
 
   update(dt, time) {
     const { m, zero, a, b } = this;
+    for (const mesh of Object.values(this.ranks)) mesh.visible = false;
     for (let i = 0; i < N; i++) {
       const s = this.soldiers[i];
       s.update(dt, time);
@@ -648,7 +682,7 @@ export class Army {
       this.white.setScalar(dim * glow);
 
       const helmets = this.helmets[s.side];
-      helmets.setMatrixAt(s.i, !show ? zero : s.helmet.on ? s.helmetMatrix(m) : s.helmet.matrix(m, sc));
+      helmets.setMatrixAt(s.i, !show || s.rank?.cap ? zero : s.helmet.on ? s.helmetMatrix(m) : s.helmet.matrix(m, sc));
       helmets.setColorAt(s.i, this.white);
       this.rifles.setMatrixAt(i, !show ? zero : s.rifle.on ? s.rifleMatrix(m) : s.rifle.matrix(m, sc));
       this.rifles.setColorAt(i, this.white);
@@ -656,6 +690,8 @@ export class Army {
         m.multiplyMatrices(s.bones.head.matrixWorld, this.bandAt);
         this.bands.setMatrixAt(i, m.multiply(tmpM.makeScale(s.band, s.band, s.band)));
       } else this.bands.setMatrixAt(i, zero);
+
+      if (s.rank && show) this.dress(s);
 
       // The shadow runs from the feet to the head, so a body lying flat casts a long one.
       s.middle(a);
@@ -703,6 +739,64 @@ export class Army {
       s.stance(0);
     }
   }
+}
+
+// The enemy commanders the title offers, and what each wears. Badges are placed in the helmet's
+// frame (x right, y up, z forward, in the helmet's own units) since it follows the head.
+const RANKS = [
+  { key: "recruit", cap: "sideCap" },
+  { key: "sergeant", badges: [["chevrons", "arm", "L"], ["chevrons", "arm", "R"]] },
+  { key: "general", cap: "peaked", badges: [["star", "chest"]] },
+];
+const BADGE_AT = {
+  arm: (side) => [(side === "L" ? 1 : -1) * 1.0, -1.98, 0.12],
+  chest: () => [0.28, -1.85, 0.58],
+};
+
+function rankKit(unit) {
+  const k = 1 / unit;
+  const S = (geo) => geo.scale(k, k, k);
+  const mesh = (geo) => {
+    const o = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.1 }));
+    o.matrixAutoUpdate = false;
+    o.frustumCulled = false;
+    o.visible = false;
+    return o;
+  };
+  const cyl = (a, b, h, n = 20) => new THREE.CylinderGeometry(a, b, h, n);
+  // A general's peaked cap: a stiff crown flaring at the top, a red band, a black peak and a
+  // gold badge.
+  const peak = new THREE.CylinderGeometry(0.29, 0.29, 0.025, 20, 1, false, -Math.PI / 2, Math.PI).scale(1, 1, 0.8).rotateX(0.35).translate(0, -0.05, 0.1);
+  const peaked = S(join([
+    [cyl(0.34, 0.27, 0.13).translate(0, 0.1, 0), 0x3a2622],
+    [cyl(0.36, 0.34, 0.03).translate(0, 0.17, 0), 0x2e1e1b],
+    [cyl(0.275, 0.275, 0.08).translate(0, 0.0, 0), 0xb8391f],
+    [peak, 0x141212],
+    [new THREE.SphereGeometry(0.045, 10, 8).scale(1, 1, 0.4).translate(0, 0.07, 0.3), 0xd9a83a],
+    [cyl(0.004, 0.004, 0.36, 4).rotateZ(Math.PI / 2).translate(0, -0.02, 0.26), 0xd9a83a],
+  ]).translate(0, -0.05, 0.02));
+  // A recruit's side cap: a folded wool cap worn along the head.
+  const sideCap = S(join([
+    [new THREE.SphereGeometry(0.3, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(0.72, 0.5, 1.08).translate(0, -0.02, 0), 0x9c6b3e],
+    [cyl(0.3, 0.3, 0.05, 20).scale(0.73, 1, 1.1).translate(0, -0.02, 0), 0x7d5230],
+    [cyl(0.302, 0.302, 0.012, 20).scale(0.73, 1, 1.1).translate(0, 0.005, 0), 0xefe6d0],
+  ]).translate(0, 0.04, 0));
+  // Three chevrons, point down, for a sergeant's sleeve.
+  const chevron = [];
+  for (let i = 0; i < 3; i++) {
+    for (const d of [-1, 1]) chevron.push([new THREE.BoxGeometry(0.13, 0.024, 0.014).rotateZ(d * 0.55).translate(d * 0.052, i * 0.045, 0), 0xe8c86a]);
+  }
+  const chev = (side) => S(join(chevron).rotateY((side === "L" ? 1 : -1) * Math.PI / 2));
+  // A general's star, worn on the chest.
+  const shape = new THREE.Shape();
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2 + Math.PI / 2;
+    const rr = i % 2 ? 0.024 : 0.058;
+    if (i) shape.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    else shape.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+  }
+  const star = S(join([[new THREE.ExtrudeGeometry(shape, { depth: 0.012, bevelEnabled: false }), 0xe0b448]]));
+  return { peaked: mesh(peaked), sideCap: mesh(sideCap), chevronsL: mesh(chev("L")), chevronsR: mesh(chev("R")), star: mesh(star) };
 }
 
 // A field dressing: a cream band with a red cross on the front.

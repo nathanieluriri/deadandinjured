@@ -360,7 +360,7 @@ export class World {
     const b2 = new THREE.CylinderGeometry(0.03, 0.08, 1.4, 4).translate(0, 0.7, 0).rotateZ(-0.8).translate(-0.1, 3.1, 0);
     const b3 = new THREE.CylinderGeometry(0.03, 0.06, 1.1, 4).translate(0, 0.55, 0).rotateX(0.7).translate(0, 3.4, 0.05);
     const tree = mergeGeometries([trunk, b1, b2, b3]);
-    const spots = [[-14, -2], [-17.5, -11], [15.5, -4], [19, -14], [-12.5, 13], [13.2, 12], [-22, -24], [24, -26]];
+    const spots = [[-14, -2], [-17.5, -11], [15.5, -4], [19, -14], [-20.5, 27], [13.2, 12], [-22, -24], [24, -26]];
     const mesh = new THREE.InstancedMesh(tree, new THREE.MeshLambertMaterial({ color: 0x241b16, flatShading: true }), spots.length);
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();

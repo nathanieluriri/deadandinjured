@@ -47,6 +47,28 @@ const smooth = (a, b, x) => {
   return t * t * (3 - 2 * t);
 };
 
+// How far right the ground behind our left flank can be levelled for the trench network: the
+// edge that no battle shot, on a desktop or a phone, ever sees past.
+const REAR = [[6, -13], [8, -11.75], [10, -10.5], [12, -9.5], [14, -8.75], [16, -8.5], [18, -8], [20, -7.5], [22, -7], [24, -6.75], [26, -6.25], [28, -5.75], [30, -5.25]];
+function rearEdge(z) {
+  if (z <= REAR[0][0]) return REAR[0][1];
+  for (let i = 1; i < REAR.length; i++) {
+    const [z1, x1] = REAR[i];
+    if (z <= z1) {
+      const [z0, x0] = REAR[i - 1];
+      return x0 + ((x1 - x0) * (z - z0)) / (z1 - z0);
+    }
+  }
+  return REAR[REAR.length - 1][1];
+}
+
+// 1 where the trench network's ground is levelled, fading to 0 at the edge of what battle sees.
+export function networkMask(x, z) {
+  if (x > -5 || z < 4 || z > 36) return 0;
+  const e = rearEdge(z);
+  return (1 - smooth(e - 3, e, x)) * (1 - smooth(-24, -28, x)) * smooth(4, 6.5, z) * (1 - smooth(30, 36, z));
+}
+
 // The field: flat ground where the squads stand, a trench behind each line, rolling
 // no man's land between them and hills that climb on both flanks.
 export function groundHeight(x, z) {
@@ -63,7 +85,7 @@ export function groundHeight(x, z) {
     const trench = (1 - smooth(0.5, 1.15, Math.abs(z - tz))) * (1 - smooth(7.5, 8.6, ax));
     h -= trench * 1.25;
   }
-  return h;
+  return h * (1 - networkMask(x, z));
 }
 
 export const smoothstep = smooth;
