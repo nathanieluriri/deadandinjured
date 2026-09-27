@@ -174,10 +174,6 @@ body[data-screen="menu"] #menu, body[data-screen="wait"] #wait, body[data-screen
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ---- match: after action ------------------------------------------------------------------ */
-.over { position: absolute; left: 50%; bottom: calc(var(--pad) + var(--bottom)); transform: translateX(-50%); display: none; }
-.phase-over .over { display: block; animation: rise 0.6s var(--out); }
-.codes { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 6px; }
-.codes div { display: grid; gap: 6px; }
 .tiles { display: inline-flex; gap: 4px; vertical-align: middle; }
 .tiles i { width: 28px; height: 32px; display: grid; place-items: center; border-radius: 7px; font-style: normal; font-weight: 900; font-variation-settings: "wdth" 115; background: linear-gradient(180deg, #faf6ee, var(--paper-2)); color: var(--ink); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.16); }
 .tiles.opp i { background: linear-gradient(180deg, #ee6a4a, var(--opp)); color: #fff; box-shadow: inset 0 -2px 0 rgba(80, 12, 0, 0.35); }

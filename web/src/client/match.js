@@ -1,7 +1,9 @@
 import { gsap } from "gsap/gsap-core";
-import { isCode, randomCode, anySupply, STANDARD_ORDERS, POWERS } from "../shared/rules.js";
+import { isCode, randomCode, anySupply, cleanOrders, STANDARD_ORDERS, POWERS } from "../shared/rules.js";
 import { TIMES } from "../shared/game.js";
 import { Desk } from "./desk.js";
+import { OrdersForm, ordersLine } from "./orders.js";
+import { telegramHtml, reportLines } from "./report.js";
 
 export const TAUNTS = ["Salute", "Fire in the hole!", "Ha ha ha", "Good game", "Come on then", "Boom"];
 const PHASE_MS = { supply: TIMES.supply, deploy: TIMES.deploy };
@@ -9,7 +11,6 @@ const mmss = (ms) => {
   const t = Math.max(0, Math.ceil(ms / 1000));
   return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
 };
-const bestText = (b) => (b && b.dead + b.injured ? `${b.dead} dead, ${b.injured} injured` : "nothing hit");
 const $ = (id) => document.getElementById(id);
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const OUT = "cubic-bezier(0.16, 1, 0.3, 1)";
@@ -37,7 +38,8 @@ export class MatchView {
     this.app = app;
     this.el = {};
     for (const id of ["note", "turn", "turnLabel", "timer", "meName", "oppName", "meCrates", "oppCrates", "oppDot", "slots", "pad", "fireBtn", "delBtn",
-      "mineLog", "theirLog", "logCount", "logs", "logSeg", "overTitle", "overText", "overCodes", "overTag", "rematchBtn", "homeBtn",
+      "mineLog", "theirLog", "logCount", "logs", "logSeg", "rematchBtn", "homeBtn", "rematchLabel", "rematchSub", "verdict",
+      "telegram", "tgBody", "tgStatus", "tgOrders", "tgOrdersLine", "tgAmend", "tgForm", "ends",
       "rps", "stamp", "myCode", "taunts", "markBtn", "randomBtn", "recent", "bar", "tbSupplies", "tbCrates", "crateCount", "unread",
       "scope", "scopeTag", "say", "reticle", "reticleTag", "live", "clock"]) this.el[id] = $(id);
     this.windows = Object.fromEntries(["recon", "sniper", "smoke"].map((k) => [k, $(`w-${k}`)]));
@@ -67,6 +69,7 @@ export class MatchView {
     this.logView(store("di.log") || "mine");
     this.dir.on("scope", (o) => this.scope(o));
     this.dir.on("say", ({ soldier, text, ms }) => this.say(soldier, text, ms, "opp"));
+    this.dir.on("verdict", (v) => this.verdict(v));
     this.app.stage.hooks.push(() => this.pin());
     gsap.ticker.add(() => this.clock());
   }
@@ -152,13 +155,12 @@ export class MatchView {
     }
     this.fieldAim();
     this.tips();
-    e.rematchBtn.addEventListener("click", () => {
-      if (this.solo) return this.app.solo(this.level);
-      this.conn?.send({ t: "rematch" });
-      e.rematchBtn.disabled = true;
-      e.rematchBtn.textContent = `Waiting for ${this.s?.opp?.name || "them"}`;
+    e.rematchBtn.addEventListener("click", () => this.call());
+    e.homeBtn.addEventListener("click", () => {
+      this.sfx.play("knock");
+      this.app.home();
     });
-    e.homeBtn.addEventListener("click", () => this.app.home());
+    e.tgAmend.addEventListener("click", () => this.amend());
     addEventListener("keydown", (ev) => {
       if (!this.active || document.querySelector("dialog[open]") || ev.metaKey || ev.ctrlKey || ev.altKey) return;
       const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
@@ -185,7 +187,7 @@ export class MatchView {
 
   // Labels for the icons: a paper tag on hover, or on a long press on a phone.
   tips() {
-    for (const b of document.querySelectorAll("#bar .tb")) {
+    for (const b of document.querySelectorAll("#bar .tb:not(.end)")) {
       const tip = document.createElement("span");
       tip.className = "tip";
       tip.setAttribute("aria-hidden", "true");
@@ -287,6 +289,7 @@ export class MatchView {
     this.scope({ on: false });
     for (const b of this.bubbles) this.unsay(b);
     clearTimeout(this.aimOff);
+    this.clearEnd();
   }
 
   enqueue(fn) {
@@ -313,10 +316,17 @@ export class MatchView {
       case "picked": this.sfx.play("click"); this.note(`<b>${this.oppName}</b> has picked`); break;
       case "joined": if (!this.solo) this.app.toast(`${m.name} joined the room`); break;
       case "ready": this.sfx.play("lock", { far: 0.8 }); this.app.toast(`${this.oppName} has deployed their code`); break;
-      case "rematch": this.app.toast(`${this.oppName} wants a rematch`); this.sfx.play("radio"); break;
+      case "rematch":
+        this.oppCalled = true;
+        this.announce(`${this.oppName} is calling for a rematch.`);
+        this.renderEnd();
+        break;
       case "taunt": this.showTaunt(m.id, "opp"); break;
       case "aim": this.oppAim(m.n); break;
-      case "presence": this.presence(m.opp); break;
+      case "presence":
+        this.presence(m.opp);
+        this.renderEnd();
+        break;
       case "error":
         this.sfx.play("error");
         this.app.toast(m.msg);
@@ -390,6 +400,11 @@ export class MatchView {
     else if (s.phase === "supply" || s.phase === "deploy") this.sfx.mood("battle");
     this.renderLogs();
     if (s.phase === "over" && s.result) this.fillOver(s.result);
+    this.renderEnd();
+    if (s.phase === "over" && this.pendingTell) {
+      this.pendingTell = false;
+      this.tell();
+    }
     this.refresh();
   }
 
@@ -437,11 +452,15 @@ export class MatchView {
       this.note(s.turn === "me" ? "<b>You fire first.</b> Four digits on the keypad, then Fire." : `<b>${this.oppName} fires first.</b> Line up your reply.`);
     } else if (phase === "over") {
       this.desk.reset({ restore: false });
-      this.banner("Ceasefire", 4000);
+      this.el.turn.classList.remove("show");
     }
+    // Arriving at a match that has already ended: the verdict and the telegram are simply there.
     if (phase === "over" && !prev) {
       this.dir.setCode(s.me.secret || "", { sound: false });
       this.dir.shot("far", 0.01);
+      const text = verdictWord(s.result);
+      if (text) this.verdict({ text, winner: s.result.winner, reason: s.result.reason, instant: true });
+      this.tell(true);
     }
   }
 
@@ -611,6 +630,10 @@ export class MatchView {
   }
 
   async playOver(r) {
+    this.result = r;
+    // The match state follows this event, so the battle's interface is cleared away now.
+    this.setPhaseClass("over");
+    this.desk.reset({ restore: false });
     this.animating++;
     this.refresh();
     this.sfx.mood("calm");
@@ -621,40 +644,175 @@ export class MatchView {
     if (this.solo && ["me", "opp", "draw"].includes(r.winner)) this.app.recordSolo({ me: "win", opp: "loss", draw: "draw" }[r.winner]);
     this.animating--;
     this.app.refreshMe();
+    if (!this.active) return;
+    await wait(this.stamped ? 0.9 : 0.2);
+    // The telegram carries the final count, which comes with the match state after this event.
+    this.pendingTell = true;
   }
 
   fillOver(r) {
+    const key = `${this.s?.match}:${r.reason}:${r.winner}`;
+    if (this.told === key) return;
+    this.told = key;
+    this.el.tgBody.innerHTML = telegramHtml(r, this.s, this.oppName, { number: telegramNo(this.s) });
+  }
+
+  // The rubber stamp that lands across the sky once the ending has played.
+  verdict({ text, winner, reason, instant = false }) {
+    const vd = this.el.verdict;
+    if (!text) return;
+    this.stamped = true;
+    vd.querySelector("b").textContent = text;
+    vd.querySelector("span").textContent = verdictLine(text, winner, reason);
+    vd.classList.add("on");
+    const ink = vd.firstElementChild;
+    if (instant) return play(ink, [{ opacity: 1 }, { opacity: 1 }], { duration: 1 });
+    play(ink, [
+      { opacity: 0, transform: "scale(2.3) rotate(-15deg)", filter: "blur(3px)", easing: "cubic-bezier(0.55, 0, 1, 0.45)" },
+      { opacity: 1, transform: "scale(0.93) rotate(-7deg)", filter: "blur(1.3px)", offset: 0.42, easing: OUT },
+      { opacity: 1, transform: "scale(1.035) rotate(-7.4deg)", filter: "blur(0.6px)", offset: 0.62 },
+      { opacity: 1, transform: "scale(0.99) rotate(-7deg)", filter: "blur(0.4px)", offset: 0.82 },
+      { opacity: 1, transform: "scale(1) rotate(-7deg)", filter: "blur(0.3px)" },
+    ], { duration: 680 });
+    wait(reduced() ? 0 : 0.28).then(() => {
+      this.sfx.play("stamp");
+      this.dir.shake(0.3);
+    });
+    const r = this.s?.result || this.result;
+    if (r) this.announce(`${text}. ${reportLines(r, this.s, this.oppName)[0]}.`);
+  }
+
+  // The telegram comes in, and the telephone and the signpost go up on the plank.
+  tell(instant = false) {
+    const b = document.body;
+    if (!this.active || b.classList.contains("told")) return;
+    const r = this.s?.result || this.result;
+    if (r) this.fillOver(r);
+    b.classList.add("told");
+    this.renderEnd();
+    this.app.layout();
     const e = this.el;
-    const s = this.s;
-    const opp = this.oppName;
-    const titles = {
-      me: { cracked: `You cracked ${opp}'s code.`, left: `${opp} left the field.`, timeout: `${opp} misfired three times.`, time: "Time. You came closest to cracking it." },
-      opp: { cracked: `${opp} cracked your code.`, left: "You left the field.", timeout: "You misfired three times.", time: `Time. ${opp} came closest to cracking it.` },
-    };
-    e.overTag.textContent = r.winner === "me" ? "victory" : r.winner === "opp" ? "defeat" : r.winner === "draw" ? "draw" : "closed";
-    if (r.winner === "draw") e.overTitle.textContent = r.reason === "time" ? "Time. Neither side came closer." : "Both codes fell in the same round.";
-    else if (r.winner === "none") e.overTitle.textContent = r.reason === "noshow" ? "Your opponent never arrived." : "The room closed.";
-    else e.overTitle.textContent = titles[r.winner]?.[r.reason] || "The war is over.";
-    const volleys = s?.volleys || [];
-    const fired = volleys.filter((v) => v.by === "me" && !v.miss).length;
-    const kills = volleys.filter((v) => v.by === "me").reduce((a, v) => a + (v.dead || 0), 0);
-    const lost = volleys.filter((v) => v.by === "opp").reduce((a, v) => a + (v.dead || 0), 0);
-    e.overText.textContent = r.winner === "none" ? "" : `${plural(fired, "volley")} fired, ${plural(kills, "enemy soldier")} down, ${lost} of yours lost.`;
-    if (r.reason === "time" && r.best) {
-      const verdict = r.winner === "me" ? "You win on the clock." : r.winner === "opp" ? `${opp} wins on the clock.` : "A stalemate on the clock.";
-      e.overText.textContent = `Your best volley: ${bestText(r.best.me)}. ${opp}'s best: ${bestText(r.best.opp)}. ${verdict}`;
+    const phone = innerWidth < 900;
+    if (!instant) {
+      play(e.telegram, [
+        { opacity: 0, transform: phone ? "translateY(70px) rotate(2deg)" : "translateX(60px) rotate(3deg)" },
+        { opacity: 1, transform: "none" },
+      ], { duration: 650, easing: OUT });
+      play(e.ends, [{ transform: "translateY(110%)" }, { transform: "none" }], { duration: 520, easing: OUT });
+      const strips = e.tgBody.querySelectorAll(".tg-lines p, .tg-codes");
+      strips.forEach((el, i) => play(el, [{ clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)" }], { duration: 420, delay: 380 + i * 280, easing: "steps(14)" }));
+      this.sfx.play("paper");
+      this.sfx.play("morse", { delay: 0.38 });
     }
-    const tiles = (code, cls) => `<span class="tiles ${cls}">${(code || "????").split("").map((c) => `<i>${c}</i>`).join("")}</span>`;
-    e.overCodes.innerHTML = `<div><span class="eyebrow">Your code</span>${tiles(r.codes?.me, "")}</div><div><span class="eyebrow">${opp}'s code</span>${tiles(r.codes?.opp, "opp")}</div>`;
-    const canRematch = this.solo || ["cracked", "timeout", "time"].includes(r.reason);
-    e.rematchBtn.hidden = !canRematch;
-    if (!s?.rematch?.me) {
-      e.rematchBtn.disabled = false;
-      e.rematchBtn.textContent = this.solo ? "Play again" : "Rematch";
+    const first = e.rematchBtn.hidden ? e.homeBtn : e.rematchBtn;
+    first.focus({ preventScroll: true });
+  }
+
+  // The telephone's state: ready to call, ringing at their end, or ringing here.
+  renderEnd() {
+    const s = this.s;
+    const e = this.el;
+    const r = s?.result || this.result;
+    if (!s || !r) return this.ringing(false);
+    const opp = this.oppName;
+    const canCall = this.solo || ["cracked", "timeout", "time"].includes(r.reason);
+    const online = this.solo || this.oppOnline !== false;
+    const mine = !!s.rematch?.me;
+    const theirs = !this.solo && (!!s.rematch?.opp || !!this.oppCalled);
+    e.rematchBtn.hidden = !canCall;
+    let label = "Call for reinforcements";
+    let sub = this.solo ? "play again" : "ask for a rematch";
+    if (!online) {
+      label = "The line is dead";
+      sub = `${opp} went off the radio`;
+    } else if (mine) {
+      label = `Ringing ${opp}`;
+      sub = "waiting for an answer";
+    } else if (theirs) {
+      label = "Answer the telephone";
+      sub = `${opp} wants a rematch`;
+    }
+    e.rematchLabel.textContent = label;
+    e.rematchSub.textContent = sub;
+    e.rematchBtn.setAttribute("aria-disabled", String(!online || mine));
+    e.rematchBtn.setAttribute("aria-label", `${label}: ${sub}`);
+    this.app.icons.setState("phone", online ? "on" : "grey");
+    this.ringing(canCall && online && (mine || theirs) && document.body.classList.contains("told"), theirs && !mine);
+    let status = "";
+    if (!canCall && r.winner !== "none") status = r.reason === "left" ? `No rematch: ${r.winner === "me" ? `${opp} left the field` : "you left the field"}.` : "";
+    else if (canCall && !online) status = `${opp} has gone off the line. No rematch unless they come back.`;
+    if (e.tgStatus.textContent !== status) e.tgStatus.textContent = status;
+    // A quick match rematch is a new draw: your own orders go into it, and you can amend them first.
+    const offers = !this.solo && canCall && !!s.offers;
+    e.tgOrders.hidden = !offers;
+    if (offers) {
+      this.offer ||= cleanOrders(s.offers.me);
+      e.tgOrdersLine.textContent = `${ordersLine(this.offer)}${mine ? " Sent with your call." : ""}`;
+      e.tgAmend.hidden = mine;
+      if (mine && !e.tgForm.hidden) this.amend(false);
     }
   }
 
+  amend(open = this.el.tgForm.hidden) {
+    const e = this.el;
+    if (open && !this.ordersForm) {
+      this.ordersForm = new OrdersForm(e.tgForm, {
+        orders: this.offer,
+        title: "Orders for the rematch",
+        onChange: (o) => {
+          this.offer = o;
+          e.tgOrdersLine.textContent = ordersLine(o);
+          this.sfx.play("click");
+        },
+      });
+    } else if (open) this.ordersForm.set(this.offer);
+    e.tgForm.hidden = !open;
+    e.tgAmend.setAttribute("aria-expanded", String(open));
+    e.tgAmend.textContent = open ? "Done" : "Amend";
+    this.sfx.play(open ? "paper" : "paperOff");
+    this.app.layout();
+  }
+
+  call() {
+    const s = this.s;
+    if (s?.phase !== "over" || this.el.rematchBtn.getAttribute("aria-disabled") === "true") return;
+    this.sfx.play("crank");
+    if (this.solo) return this.app.solo(this.level);
+    this.conn?.send(s.offers ? { t: "rematch", orders: this.offer } : { t: "rematch" });
+    this.s = { ...s, rematch: { ...s.rematch, me: true } };
+    this.renderEnd();
+  }
+
+  ringing(on, loud = false) {
+    this.app.icons.setRing("phone", on);
+    if (!on) {
+      clearInterval(this.ringTimer);
+      this.ringTimer = null;
+      return;
+    }
+    if (this.ringTimer) return;
+    const ring = () => this.sfx.play("ring", loud ? {} : { far: 0.7, gain: 0.5 });
+    ring();
+    this.ringTimer = setInterval(ring, 2400);
+  }
+
+  clearEnd() {
+    document.body.classList.remove("told");
+    this.el.verdict.classList.remove("on");
+    this.el.verdict.firstElementChild.__anim?.cancel();
+    this.ringing(false);
+    this.told = null;
+    this.result = null;
+    this.pendingTell = false;
+    this.stamped = false;
+    this.oppCalled = false;
+    this.offer = null;
+    if (this.ordersForm && !this.el.tgForm.hidden) this.amend(false);
+  }
+
   async restart() {
+    this.clearEnd();
+    this.app.layout();
     this.dir.resetField();
     this.input = "";
     this.marks.clear();
@@ -1020,7 +1178,7 @@ export class MatchView {
       else e.turnLabel.textContent = my ? "Your shot" : "Their shot";
     } else {
       e.turn.classList.remove("mine", "last");
-      e.turnLabel.textContent = { lobby: "Waiting", supply: "Supply draw", deploy: "Deploy", over: "Ceasefire" }[s.phase] || "";
+      e.turnLabel.textContent = { lobby: "Waiting", supply: "Supply draw", deploy: "Deploy" }[s.phase] || "";
     }
   }
 
@@ -1186,6 +1344,34 @@ export class MatchView {
       this.sfx.play("tick", { hi: sec <= 3 });
     }
   }
+}
+
+// The word stamped over the field: the same one the director would drop in 3D.
+function verdictWord(r) {
+  if (!r) return null;
+  const { winner, reason } = r;
+  if (winner === "draw") return "STALEMATE";
+  if (winner === "none") return null;
+  if (reason === "time") return "TIME";
+  if (winner === "me") return reason === "cracked" ? "CRACKED" : "VICTORY";
+  return reason === "cracked" ? "OVERRUN" : "FORFEIT";
+}
+
+function verdictLine(text, winner, reason) {
+  if (text === "TIME") return winner === "me" ? "closest to cracking" : "they came closer";
+  if (text === "STALEMATE") return reason === "time" ? "neither side came closer" : "both codes fell";
+  if (text === "CRACKED") return "enemy code broken";
+  if (text === "OVERRUN") return "our code broken";
+  if (text === "VICTORY") return reason === "left" ? "the enemy quit the field" : "the enemy misfired";
+  if (text === "FORFEIT") return reason === "left" ? "field abandoned" : "three misfires";
+  return "";
+}
+
+// A telegram number that stays the same for a match, from its room and match count.
+function telegramNo(s) {
+  let h = s.match || 1;
+  for (const c of String(s.room || s.opp?.name || "")) h = (h * 31 + c.charCodeAt(0)) % 9000;
+  return 1000 + h;
 }
 
 function wait(s) {

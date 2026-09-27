@@ -24,7 +24,6 @@ export function reportLines(r, s, opp) {
   if (r.reason === "time" && r.best) {
     lines.push(`Your best volley ${best(r.best.me)}`);
     lines.push(`${opp}'s best ${best(r.best.opp)}`);
-    lines.push(r.winner === "me" ? "You win on the clock" : r.winner === "opp" ? `${opp} wins on the clock` : "A stalemate on the clock");
   }
   return lines;
 }

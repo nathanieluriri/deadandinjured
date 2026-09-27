@@ -21,6 +21,7 @@ export class Stage {
     this.restores = [];
     this.timeScale = 1;
     this.inset = { top: 0, bottom: 0 };
+    this.view = 0;
     this.time = 0;
     this.frames = [];
     this.good = 0;
@@ -50,18 +51,27 @@ export class Stage {
     this.onResize?.();
   }
 
-  setInset(top, bottom) {
+  setInset(top, bottom, glide = false) {
     if (top === this.inset.top && bottom === this.inset.bottom) return;
     this.inset = { top, bottom };
+    this.glide = glide && !matchMedia("(prefers-reduced-motion: reduce)").matches;
     this.offset();
     this.onResize?.();
   }
 
-  // Keeps the focal point centred in the part of the screen the panels leave open.
-  offset() {
+  // Keeps the focal point centred in the part of the screen the panels leave open. A glide
+  // eases there over half a second instead of jumping, for panels that arrive during a shot.
+  offset(real = 0) {
+    const to = (this.inset.bottom - this.inset.top) / 2;
+    const k = this.glide && real ? 1 - Math.exp(-real * 5) : this.glide ? 0 : 1;
+    this.view += (to - this.view) * k;
+    if (Math.abs(to - this.view) < 0.5) {
+      this.view = to;
+      this.glide = false;
+    }
     const w = innerWidth;
     const h = innerHeight;
-    const shift = Math.round((this.inset.bottom - this.inset.top) / 2);
+    const shift = Math.round(this.view);
     if (shift) this.camera.setViewOffset(w, h, 0, shift, w, h);
     else this.camera.clearViewOffset();
     this.camera.updateProjectionMatrix();
@@ -85,6 +95,7 @@ export class Stage {
     const dt = Math.min(real, 0.05) * this.timeScale;
     this.time += dt;
     for (const h of this.hooks) h(dt, this.time, real);
+    if (this.glide) this.offset(real);
     const r = this.renderer;
     this.fit();
     if (this.worldOn) r.render(this.scene, this.camera);

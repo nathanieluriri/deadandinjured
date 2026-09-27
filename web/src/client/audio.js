@@ -568,6 +568,47 @@ export class Sfx {
     }
   }
 
+  // A field telephone's bell: a clapper between two small bells, two bursts and a pause.
+  s_ring(o, t) {
+    const out = this.out(o, t, { verb: 0.3, gain: 0.26 });
+    for (const [start, len] of [[0, 0.45], [0.65, 0.45]]) {
+      for (let i = 0; i * 0.045 < len; i++) {
+        const at = t + start + i * 0.045;
+        const f = i % 2 ? 2350 : 1980;
+        for (const [ratio, g, d] of [[1, 0.5, 0.16], [2.76, 0.18, 0.08], [5.4, 0.07, 0.05]]) {
+          const v = this.vca(at, 0.001, g, d, out);
+          this.osc("sine", f * ratio, at, d, v);
+        }
+      }
+    }
+  }
+
+  // Cranking the handle to call the exchange: a ratchet and the whir of the magneto.
+  s_crank(o, t) {
+    const out = this.out(o, t, { verb: 0.15, gain: 0.45 });
+    for (let i = 0; i < 9; i++) {
+      const at = t + i * 0.06 + (i % 3) * 0.01;
+      this.hiss(at, out, { type: "bandpass", f: 2400 + (i % 2) * 500, q: 3, peak: 0.35, d: 0.02 });
+    }
+    const lp = this.filter("lowpass", 600, 1);
+    lp.connect(this.vca(t, 0.08, 0.12, 0.6, out));
+    this.osc("sawtooth", 70, t, 0.6, lp, { to: 150 });
+  }
+
+  // The telegraph sounder as the strips come off the tape.
+  s_morse(o, t) {
+    const out = this.out(o, t, { verb: 0.12, gain: 0.35 });
+    let at = t;
+    for (const len of o.pattern || [1, 3, 1, 1, 3, 3, 1]) {
+      for (const [dt, f] of [[0, 900], [len * 0.06, 700]]) {
+        const bp = this.filter("bandpass", f * 2, 2);
+        bp.connect(this.vca(at + dt, 0.001, 0.4, 0.025, out));
+        this.osc("square", f, at + dt, 0.025, bp);
+      }
+      at += len * 0.06 + 0.07;
+    }
+  }
+
   s_hover(o, t) {
     const now = performance.now();
     if (now - this.lastHover < 60) return;

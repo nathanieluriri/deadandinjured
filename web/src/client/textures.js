@@ -111,6 +111,33 @@ function wood(base, grain, { plank = 0, knots = 3 } = {}) {
   });
 }
 
+// A mask for rubber-stamp ink: mostly solid, with the gaps and thin patches of a worn stamp.
+function ink() {
+  return tile(256, 256, "#000", (x, w, h) => {
+    x.globalCompositeOperation = "destination-out";
+    blotches(x, w, h, 12, "rgba(0, 0, 0, 0.4)");
+    speckle(x, w, h, 900, "rgba(0, 0, 0, 0.95)");
+    x.fillStyle = "rgba(0, 0, 0, 0.9)";
+    for (let i = 0; i < 70; i++) {
+      x.beginPath();
+      x.arc(Math.random() * w, Math.random() * h, rnd(0.8, 3.2), 0, Math.PI * 2);
+      x.fill();
+    }
+    x.strokeStyle = "rgba(0, 0, 0, 0.8)";
+    for (let i = 0; i < 9; i++) {
+      const px = Math.random() * w;
+      const py = Math.random() * h;
+      const a = rnd(-0.4, 0.4);
+      const len = rnd(12, 46);
+      x.lineWidth = rnd(0.6, 1.6);
+      x.beginPath();
+      x.moveTo(px, py);
+      x.lineTo(px + Math.cos(a) * len, py + Math.sin(a) * len);
+      x.stroke();
+    }
+  });
+}
+
 // The same canvases, for the 3D plank under the icons.
 export const canvases = {};
 
@@ -123,6 +150,7 @@ export async function paintTextures() {
     pad: paper("#efe8d6"),
     plank: wood("#4b3a28", "rgba(20, 12, 6, A)", { plank: 0, knots: 2 }),
     board: wood("#3b2c1f", "rgba(12, 8, 4, A)", { plank: 64, knots: 4 }),
+    ink: ink(),
   };
   Object.assign(canvases, set);
   const root = document.documentElement.style;

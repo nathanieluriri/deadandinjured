@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { tint, join, box, cyl, fieldPhone, signpost } from "./kit.js";
 import { SIDES } from "./palette.js";
 import { buildPlane } from "./plane.js";
 import { rock, paper, blade } from "./rps.js";
@@ -14,22 +15,7 @@ const K = {
   paper: 0xf0e7d3, ink: 0x2a2520, glass: 0x8fb9d0, smoke: 0xd8d2c7, pencil: 0xd9a42b, eraser: 0xd98a82, red: 0xb8391f,
 };
 
-function tint(geo, hex) {
-  const g = geo.index ? geo.toNonIndexed() : geo;
-  if (g.attributes.uv) g.deleteAttribute("uv");
-  if (g.attributes.color) return g;
-  const c = new THREE.Color(hex);
-  const n = g.attributes.position.count;
-  const col = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3);
-  g.setAttribute("color", new THREE.BufferAttribute(col, 3));
-  return g;
-}
-
-const join = (parts) => mergeGeometries(parts.map(([g, hex]) => tint(g, hex)));
 const PI = Math.PI;
-const box = (w, h, d, r = 0.02) => new RoundedBoxGeometry(w, h, d, 2, Math.min(r, w / 2 - 0.001, h / 2 - 0.001, d / 2 - 0.001));
-const cyl = (a, b, h, n = 16) => new THREE.CylinderGeometry(a, b, h, n);
 const blob = (r) => new THREE.IcosahedronGeometry(r, 1);
 
 function gun() {
@@ -174,6 +160,8 @@ const ICONS = {
   rock: { build: () => rock(SIDES.me.clay), pose: [0.3, 0.4, 0], size: 0.9 },
   paper: { build: () => paper(SIDES.opp.clay), pose: [0.15, -0.35, 0.12], size: 0.95 },
   scissors: { build: scissors, pose: [0.2, -0.3, -0.6], size: 1 },
+  phone: { build: fieldPhone, pose: [0.32, -0.62, 0], size: 1.02 },
+  signpost: { build: signpost, pose: [0.12, -0.5, 0], size: 1.05 },
 };
 
 const mat = () => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.58, metalness: 0.06 });
@@ -387,7 +375,7 @@ export class IconDeck {
   }
 
   // An icon for `name`, drawn over `el` at `size` of the element's height.
-  add(key, el, { kind = key, size = 0.78 } = {}) {
+  add(key, el, { kind = key, size = 0.78, hit = el } = {}) {
     const spec = ICONS[kind];
     size *= spec.size || 1;
     const built = spec.build(this.props);
@@ -416,12 +404,11 @@ export class IconDeck {
       k: root.userData.k, hover: 0, hoverTo: 0, press: 0, pulse: 0, state: "on", dimK: 1, t: Math.random() * 10,
     };
     this.items.set(key, item);
-    this.hoverable(item);
+    this.hoverable(item, hit);
     return item;
   }
 
-  hoverable(item) {
-    const el = item.el;
+  hoverable(item, el) {
     const on = () => (item.hoverTo = 1);
     const off = () => (item.hoverTo = document.activeElement === el ? 1 : 0);
     el.addEventListener("pointerenter", on);
@@ -485,6 +472,13 @@ export class IconDeck {
     if (it) it.pulsing = on;
   }
 
+  // A telephone's bell: two short bursts of shaking, then a pause, from the moment it starts.
+  setRing(key, on) {
+    const it = this.items.get(key);
+    if (!it || !!it.ringAt === on) return;
+    it.ringAt = on ? this.time || 1e-6 : 0;
+  }
+
   update(dt) {
     if (!this.on) return;
     this.time += dt;
@@ -501,14 +495,16 @@ export class IconDeck {
       it.press *= Math.exp(-dt * 9);
       const pulse = it.pulsing ? (Math.sin(this.time * 4.2) * 0.5 + 0.5) : 0;
       const px = Math.min(r.width, r.height) * it.size;
-      const lift = it.hover * px * 0.14 - it.press * px * 0.08 + pulse * px * 0.07;
+      const ph = it.ringAt ? (this.time - it.ringAt) % 2.4 : 9;
+      const ring = ph < 0.45 || (ph > 0.65 && ph < 1.1) ? 1 : 0;
+      const lift = it.hover * px * 0.14 - it.press * px * 0.08 + pulse * px * 0.07 + ring * px * 0.05;
       it.root.position.set(r.left + r.width / 2, -(r.top + r.height / 2) + lift, 0);
       const s = px * it.k * (1 + it.hover * 0.1 + pulse * 0.05 - it.press * 0.06);
       it.root.scale.setScalar(s);
       it.holder.rotation.set(
         Math.sin(it.t * 0.9) * 0.04 * it.hover - it.press * 0.2,
         Math.sin(it.t * 1.3) * 0.35 * it.hover + Math.sin(it.t * 0.5) * 0.05,
-        Math.sin(it.t * 1.1) * 0.03,
+        Math.sin(it.t * 1.1) * 0.03 + ring * Math.sin(this.time * 75) * 0.11,
       );
       const dim = it.state === "dim" ? 0.55 : it.state === "lock" ? 0.68 : 1;
       it.dimK += (dim - it.dimK) * (1 - Math.exp(-dt * 8));

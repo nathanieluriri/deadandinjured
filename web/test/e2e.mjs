@@ -108,6 +108,12 @@ const rb = (await state(B)).result;
 console.log("A result", ra.winner, ra.reason, ra.codes, "| B result", rb.winner, rb.reason);
 if (ra.winner !== "me" || rb.winner !== "opp") fail("wrong winner");
 if (ra.codes.opp !== "5678" || rb.codes.opp !== "1234") fail("codes not revealed at the end");
+for (const p of [A, B]) await until(p, () => document.body.classList.contains("told"), null, 120000);
+const told = (p) => p.page.evaluate(() => ({ stamp: document.querySelector("#verdict b").textContent, telegram: document.getElementById("tgBody").innerText }));
+const [ta, tb] = [await told(A), await told(B)];
+if (ta.stamp !== "CRACKED" || tb.stamp !== "OVERRUN") fail(`wrong stamps: ${ta.stamp}, ${tb.stamp}`);
+if (!/you cracked/i.test(ta.telegram) || !/cracked your code/i.test(tb.telegram)) fail("the telegrams do not report the crack");
+console.log("stamps", ta.stamp, tb.stamp);
 await shot(A, "over");
 await shot(B, "over");
 
@@ -117,6 +123,8 @@ if (!row || row.wins < 1) fail("the win was not recorded");
 console.log("leaderboard row", row);
 
 await A.page.click("#rematchBtn");
+await until(B, () => document.getElementById("rematchLabel").textContent === "Answer the telephone", null, 30000);
+console.log(`${B.name}'s telephone is ringing`);
 await B.page.click("#rematchBtn");
 for (const p of [A, B]) await until(p, () => window.__app.view.s?.phase === "supply" && window.__app.view.s.match === 2);
 console.log("rematch started");

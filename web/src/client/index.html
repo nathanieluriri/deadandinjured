@@ -28,6 +28,7 @@
 <div class="grain" aria-hidden="true"></div>
 
 <div class="stamp" id="stamp" aria-hidden="true"><b></b><span></span></div>
+<div class="verdict" id="verdict" aria-hidden="true"><div class="vd-ink"><b></b><span></span></div></div>
 <div class="scope" id="scope" aria-hidden="true"><i class="cross"></i><span class="scope-tag" id="scopeTag"></span></div>
 <div class="say" id="say" aria-hidden="true"></div>
 <div class="reticle" id="reticle" aria-hidden="true"><svg viewBox="0 0 54 54"><circle cx="27" cy="27" r="16"/><path d="M27 3v10M27 41v10M3 27h10M41 27h10"/></svg><span id="reticleTag"></span></div>
@@ -189,6 +190,10 @@
         <button type="button" class="tb" data-open="log" data-key="L" aria-label="Field notebook"><i class="mk"></i><b class="unread" id="unread" hidden></b></button>
         <button type="button" class="tb" data-open="chat" data-key="T" aria-label="Taunts"><i class="mk"></i></button>
       </div>
+      <div class="plank ends" id="ends">
+        <button type="button" class="tb end" id="rematchBtn"><i class="ic" id="phoneIc"></i><span class="end-tag"><b id="rematchLabel">Call for reinforcements</b><small id="rematchSub">play again</small></span></button>
+        <button type="button" class="tb end" id="homeBtn"><i class="ic" id="signIc"></i><span class="end-tag"><b>Back to base</b></span></button>
+      </div>
       <div class="plank hands" id="rps">
         <button type="button" class="tb hand" data-pick="rock" data-key="R" aria-label="Rock"><span>Rock</span></button>
         <button type="button" class="tb hand" data-pick="paper" data-key="P" aria-label="Paper"><span>Paper</span></button>
@@ -197,18 +202,15 @@
     </nav>
 
     <div class="over" id="over">
-      <div class="win card">
-        <div class="win-bar"><i></i><i></i><i></i><span>after.action</span><em id="overTag"></em></div>
-        <div class="win-body">
-          <p class="big" id="overTitle"></p>
-          <p class="muted" id="overText"></p>
-          <div class="codes" id="overCodes"></div>
-          <div class="row">
-            <button type="button" class="btn" id="rematchBtn">Rematch</button>
-            <button type="button" class="btn ghost" id="homeBtn">Back to base</button>
-          </div>
+      <article class="telegram" id="telegram" aria-labelledby="tgTitle">
+        <h2 class="vh" id="tgTitle">Telegram from the front</h2>
+        <div id="tgBody"></div>
+        <p class="tg-status" id="tgStatus" role="status"></p>
+        <div class="tg-orders" id="tgOrders" hidden>
+          <p class="tg-line"><span class="tg-label">Your orders</span> <span id="tgOrdersLine"></span> <button type="button" class="tg-amend" id="tgAmend" aria-expanded="false" aria-controls="tgForm">Amend</button></p>
+          <div id="tgForm" hidden></div>
         </div>
-      </div>
+      </article>
     </div>
   </section>
 </main>

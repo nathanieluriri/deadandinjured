@@ -188,6 +188,9 @@ class App {
     const ic = this.icons;
     ic.addBoard("plank", $("plank"), canvases.plank);
     ic.addBoard("hands", $("rps"), canvases.plank);
+    ic.addBoard("ends", $("ends"), canvases.plank);
+    ic.add("phone", $("phoneIc"), { size: 1, hit: $("rematchBtn") });
+    ic.add("signpost", $("signIc"), { size: 1, hit: $("homeBtn") });
     for (const b of document.querySelectorAll("#bar [data-open]")) ic.add(b.dataset.open, b, { size: 0.9 });
     for (const b of document.querySelectorAll("#rps [data-pick]")) ic.add(b.dataset.pick, b, { size: 0.9 });
     ic.add("crate", $("tbCrate"), { size: 0.95 });
@@ -360,12 +363,17 @@ class App {
         const bar = $("bar").getBoundingClientRect().height || 72;
         if (b.classList.contains("phase-deploy") || b.classList.contains("phase-battle")) bottom = innerWidth < 900 ? (bar + 360) * 0.9 : innerWidth < 1180 ? (bar + 375) * 0.62 : (bar + 190) * 0.6;
         else if (b.classList.contains("phase-supply")) bottom = bar + 20;
-        else if (b.classList.contains("phase-over")) bottom = innerWidth < 900 ? 220 : 0;
+        else if (b.classList.contains("phase-over")) {
+          // On a phone the telegram takes the lower half, so the scene moves up above it.
+          const told = b.classList.contains("told");
+          const over = $("over").getBoundingClientRect();
+          bottom = told && innerWidth < 900 ? innerHeight - over.top + 8 : bar;
+        }
         top = innerWidth < 900 ? 100 : 50;
       } else if (this.screen === "menu") {
         bottom = innerWidth < 900 ? Math.min(330, innerHeight * 0.42) : 0;
       } else if (this.screen === "wait" || this.screen === "search") bottom = innerWidth < 900 ? 280 : 120;
-      this.stage.setInset(Math.round(top), Math.round(bottom));
+      this.stage.setInset(Math.round(top), Math.round(bottom), this.screen === "match");
     });
   }
 
