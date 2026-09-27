@@ -23,7 +23,8 @@ Every match is played under a set of **orders**: which supplies are on, how many
 | `src/client/scene/stage.js` | The renderer. The drawing buffer is only resized right before a render, since a resize clears it and a cleared buffer on screen is a black frame; resolution adapts to the frame rate in quarter steps, and a lost WebGL context is rebuilt. |
 | `src/client/scene/logo.js` | The portfolio's block logo with a symbol in its fourth block: a skull for dead, a bandage for injured. They frame the title while the field loads and land above every volley's result. |
 | `src/client/audio.js` | Every sound is synthesised with Web Audio (cannons, whistles, the death knell, bugles, wind), so there are no audio files to download. |
-| `src/client/match.js` | The match screen: plays the server's events as animations in order. The dock under the field switches between the keypad, the supply cards and the log (on desktop the log is a side window), so one thing is on screen at a time; the turn banner fades once read and comes back only if you sit idle. |
+| `src/client/match.js` | The match screen: plays the server's events as animations in order. Its tools sit on a wooden plank at the bottom as clay 3D icons (`scene/icons.js`): the field gun opens fire control, the plane, scope and smoke canister open each supply's dossier, the notebook keeps the log, the speech bubble holds the taunts. Windows open, minimise and close like a taskbar (`desk.js`); a brass stud in the corner pauses. |
+| `src/client/match.css`, `textures.js` | The match screen's materials: paper, manila card and wood painted once at load, stencil, typewriter and chalk lettering (Stardos Stencil, Courier Prime and Caveat, all under the Open Font License, in `static/fonts`). |
 
 ## Redesign
 

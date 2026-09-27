@@ -118,39 +118,296 @@ body[data-screen="match"] #manualBtn, body[data-screen="match"] #soundBtn, body[
 .w-min:focus-visible::before, .w-x:focus-visible::before { box-shadow: 0 0 0 3px rgba(239, 231, 214, 0.9); }
 .w-body { position: relative; min-height: 0; }
 
-/* fire control: a wooden board with typewriter keys */
-.w-aim { left: 50%; bottom: calc(var(--barH) + 4px); width: 356px; margin-left: -178px; border-radius: 8px; background: var(--tex-board), #3b2c1f; color: var(--paint); box-shadow: inset 0 0 0 2px #1a120b, inset 0 2px 0 rgba(255, 215, 160, 0.14), inset 0 -3px 0 rgba(0, 0, 0, 0.45), 0 18px 40px rgba(0, 0, 0, 0.6); }
+/* fire control: a signaller's set. Walnut bakelite keys with paint-filled cream numerals,
+   mounted in an old, tarnished brass switch plate with nickel screws. FIRE is a red bakelite
+   push key sunk in a brass guard, with a pilot lamp set into its face.
+
+   Every key: the button is the bakelite cap, ::before is the hole in the plate (on FIRE, the
+   guard), ::after carries chinagraph marks (on FIRE, the armed glow).
+   One variable, --t, is how far the key has travelled down: it moves the cap, shortens the
+   visible bakelite side and tightens the cast shadow, while the hole stays put. */
+
+:root {
+  --cream: #f1e4c4;
+  --bk-hi: #6e3522; --bk: #4a1e12; --bk-lo: #2c0f08; --bk-side: #170603;
+  --iv-hi: #fbf2dc; --iv: #e8dab9; --iv-lo: #c9b58c; --iv-side: #6d5a3a;
+  --red-hi: #d9533a; --red: #a52817; --red-lo: #5e1209; --red-side: #2e0703;
+  --amber: #f2a93b;
+  --screw: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cdefs%3E%3CradialGradient id='g' cx='.36' cy='.3' r='.85'%3E%3Cstop offset='0' stop-color='%23f3efe2'/%3E%3Cstop offset='.45' stop-color='%239d978a'/%3E%3Cstop offset='1' stop-color='%23363229'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='6' cy='6.7' r='5' fill='%23000' opacity='.45'/%3E%3Ccircle cx='6' cy='6' r='5' fill='url(%23g)'/%3E%3Ccircle cx='6' cy='6' r='4.6' fill='none' stroke='%23000' stroke-opacity='.25' stroke-width='.6'/%3E%3Cpath d='M2.7 7.7 9.3 4.3' stroke='%23fff' stroke-opacity='.5' stroke-width='.6' transform='translate(.2 .7)'/%3E%3Cpath d='M2.7 7.7 9.3 4.3' stroke='%23242219' stroke-width='1.3' stroke-linecap='round'/%3E%3C/svg%3E");
+  /* aged brass: light falling off from the top, two tarnish blooms, an uneven brushed grain,
+     on a darker, browner base than new brass so the plate sits back behind the keys */
+  --brass-light: linear-gradient(178deg, rgba(255, 236, 190, 0.3), rgba(255, 236, 190, 0.07) 26%, rgba(0, 0, 0, 0) 52%, rgba(26, 14, 2, 0.42));
+  --brass-tarnish:
+    radial-gradient(24% 36% at 86% 74%, rgba(54, 60, 30, 0.4), rgba(54, 60, 30, 0) 72%),
+    radial-gradient(16% 30% at 11% 38%, rgba(66, 42, 14, 0.34), rgba(66, 42, 14, 0) 72%),
+    radial-gradient(30% 18% at 48% 104%, rgba(30, 18, 4, 0.35), rgba(30, 18, 4, 0) 70%);
+  --brass-grain:
+    repeating-linear-gradient(0deg, rgba(255, 240, 200, 0.05) 0 1px, rgba(0, 0, 0, 0) 1px 3px, rgba(40, 24, 4, 0.07) 3px 4px, rgba(0, 0, 0, 0) 4px 7px),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0) 0 9px, rgba(255, 240, 200, 0.06) 9px 10px, rgba(0, 0, 0, 0) 10px 17px, rgba(40, 24, 4, 0.06) 17px 18px, rgba(0, 0, 0, 0) 18px 29px),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0) 0 41px, rgba(40, 24, 4, 0.05) 41px 67px, rgba(0, 0, 0, 0) 67px 109px);
+  --brass-base: linear-gradient(176deg, #a08448, #876a35 45%, #614a20);
+}
+
+.w-aim {
+  left: 50%; bottom: calc(var(--barH) + 4px); width: 356px; margin-left: -178px; border-radius: 8px;
+  background: var(--tex-board), #3b2c1f; color: var(--paint);
+  box-shadow: inset 0 0 0 2px #1a120b, inset 0 2px 0 rgba(255, 215, 160, 0.14), inset 0 -3px 0 rgba(0, 0, 0, 0.45), 0 18px 40px rgba(0, 0, 0, 0.6);
+}
 .w-aim .w-title { color: var(--paint); text-shadow: 0 1px 0 rgba(0, 0, 0, 0.8); }
-.w-aim .w-body { padding: 2px 16px 16px; }
+.w-aim .w-body { padding: 2px 14px 16px; }
+
 .recent { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin: 0 0 10px; padding: 5px 8px 4px; border-radius: 2px; background: var(--tex-pad), #efe8d6; color: var(--ink-paper-2); font: 400 12px/1 var(--typed); box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4); rotate: -0.5deg; }
 .recent b { font-weight: 700; color: var(--ink-paper); }
 .recent .guess i { width: 17px; height: 20px; font-size: 13px; }
 .recent .pill { font-size: 17px; }
-.slots { display: flex; justify-content: center; gap: 10px; margin: 0 0 14px; }
-.slots span { width: 56px; height: 62px; display: grid; place-items: center; border-radius: 4px; background: var(--tex-pad), #efe8d6; color: var(--ink-paper); font: 700 38px/1 var(--stencil); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18), inset 0 0 0 1px rgba(60, 40, 20, 0.3), 0 6px 12px rgba(0, 0, 0, 0.45); transition: transform 0.3s var(--out); }
-.slots span:empty { background: rgba(0, 0, 0, 0.32); box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(239, 231, 214, 0.12); }
-.slots span:empty:first-of-type, .slots span:not(:empty) + span:empty { box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6), inset 0 0 0 2px rgba(255, 193, 90, 0.55); }
+
+/* the paint-and-grime film over both brass pieces: paper texture multiplied into the metal */
+.slots::before, .pad::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: var(--tex-paper) 0 0 / 200px 200px; mix-blend-mode: multiply; opacity: 0.75;
+}
+
+/* ---------- the indicator strip: four drum windows in a brass bezel ---------- */
+.slots {
+  --so: 8px; --ss: 11px;
+  position: relative; isolation: isolate;
+  display: flex; justify-content: center; gap: 9px; width: fit-content; margin: 0 auto 14px; padding: 8px 26px 9px;
+  border-radius: 9px;
+  background:
+    var(--screw) left var(--so) center / var(--ss) var(--ss) no-repeat, var(--screw) right var(--so) center / var(--ss) var(--ss) no-repeat,
+    radial-gradient(circle var(--ss) at calc(var(--so) + var(--ss) / 2) 50%, rgba(36, 22, 4, 0.55) 40%, rgba(36, 22, 4, 0.2) 70%, rgba(36, 22, 4, 0)),
+    radial-gradient(circle var(--ss) at calc(100% - var(--so) - var(--ss) / 2) 50%, rgba(36, 22, 4, 0.55) 40%, rgba(36, 22, 4, 0.2) 70%, rgba(36, 22, 4, 0)),
+    var(--brass-light), var(--brass-tarnish), var(--brass-grain), var(--brass-base);
+  box-shadow: inset 0 1px 0 rgba(255, 238, 195, 0.55), inset 0 -2px 0 rgba(50, 32, 6, 0.6), inset 0 0 0 1px rgba(50, 32, 8, 0.45), 0 3px 0 #2e1e08, 0 7px 14px rgba(0, 0, 0, 0.55);
+}
+.slots span {
+  position: relative; width: 54px; height: 60px; display: grid; place-items: center; border-radius: 5px;
+  color: #1d1812; font: 700 38px/1 var(--stencil);
+  /* an ivory drum seen through a window: cylinder shading, top and bottom falling into shadow */
+  background:
+    linear-gradient(180deg, rgba(20, 12, 4, 0.55), rgba(20, 12, 4, 0) 22%, rgba(255, 255, 255, 0.28) 42%, rgba(255, 255, 255, 0) 55%, rgba(20, 12, 4, 0) 72%, rgba(20, 12, 4, 0.6)),
+    var(--tex-pad), #efe4c8;
+  background-size: auto, 180px auto, auto;
+  box-shadow: inset 0 0 0 1.5px #1a0f06, inset 0 3px 4px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(255, 236, 190, 0.45);
+  transition: transform 0.3s var(--out);
+}
+.slots span:empty {
+  background: radial-gradient(90% 70% at 50% 35%, #2a1c10, #0d0805);
+  box-shadow: inset 0 0 0 1.5px #1a0f06, inset 0 4px 7px rgba(0, 0, 0, 0.85), 0 1px 0 rgba(255, 236, 190, 0.45);
+}
+/* the next window to fill: a lit amber edge, a painted amber cursor inside, a nickel pointer below */
+.slots span:empty:first-of-type, .slots span:not(:empty) + span:empty {
+  background: radial-gradient(80% 60% at 50% 100%, rgba(242, 169, 59, 0.3), transparent 70%), radial-gradient(90% 70% at 50% 35%, #2e1d0e, #0d0805);
+  box-shadow: inset 0 0 0 1.5px #1a0f06, inset 0 0 0 3px rgba(255, 190, 90, 0.85), inset 0 0 12px rgba(255, 170, 60, 0.45), inset 0 4px 7px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 236, 190, 0.45), 0 0 10px rgba(255, 170, 60, 0.3);
+}
+.slots span:empty:first-of-type::after, .slots span:not(:empty) + span:empty::after {
+  content: ""; position: absolute; left: 13px; right: 13px; bottom: 11px; height: 5px; border-radius: 2px 3px 2px 3px;
+  background: linear-gradient(180deg, #ffe0a0, #f2a93b 55%, #c47414);
+  box-shadow: 0 0 7px 1px rgba(255, 170, 60, 0.75), inset 0 -1px 0 rgba(120, 60, 0, 0.45);
+}
+.slots span:empty:first-of-type::before, .slots span:not(:empty) + span:empty::before {
+  content: ""; position: absolute; left: 50%; bottom: -8px; width: 12px; height: 6px; margin-left: -6px;
+  background: linear-gradient(180deg, #fbf6ea, #b6b0a2 55%, #5e594f);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.6));
+}
 .phase-deploy .slots { display: none; }
-.pad { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px 10px; justify-items: center; }
-.pad button { position: relative; width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; font: 700 23px/1 var(--typed); color: #231c14; background: radial-gradient(circle at 50% 36%, #fbf5e7 0 52%, #ded2b8 72%, #c9bb9c); box-shadow: 0 0 0 3px #a8904f, 0 0 0 4.5px #3a2a15, 0 5px 0 1.5px #1a120a, 0 8px 12px rgba(0, 0, 0, 0.55); transition: transform 0.08s, box-shadow 0.08s, filter 0.2s, opacity 0.2s; }
-.pad button:hover:not(:disabled) { filter: brightness(1.06); }
-.pad button:active:not(:disabled) { transform: translateY(4px); box-shadow: 0 0 0 3px #a8904f, 0 0 0 4.5px #3a2a15, 0 1px 0 1.5px #1a120a, 0 3px 5px rgba(0, 0, 0, 0.5); }
-.pad button:focus-visible { box-shadow: 0 0 0 3px #a8904f, 0 0 0 4.5px #3a2a15, 0 5px 0 1.5px #1a120a, 0 0 0 8px rgba(255, 193, 90, 0.7); }
-.pad button:disabled { opacity: 0.45; filter: saturate(0.3); }
-.pad button.used { color: rgba(35, 28, 20, 0.35); }
-.pad button.out::after { content: ""; position: absolute; left: 20%; right: 20%; top: 50%; height: 3px; border-radius: 2px; background: var(--stamp); transform: rotate(-28deg); opacity: 0.9; }
-.pad button.out { color: rgba(35, 28, 20, 0.45); }
-.pad button.in::before { content: ""; position: absolute; inset: 5px; border-radius: 50%; border: 2.5px solid #d98a1e; transform: rotate(-12deg); border-left-color: transparent; }
-.pad svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linejoin: round; stroke-linecap: round; }
-.pad .del, .pad .mark, .pad .rand { color: var(--chalk); background: radial-gradient(circle at 50% 36%, #3b3a37 0 52%, #262522 72%, #1a1917); }
-.pad .mark[aria-pressed="true"] { color: #231c14; background: radial-gradient(circle at 50% 36%, #ffd27a 0 52%, #e0a534 72%, #b98320); }
-.pad .fire { grid-column: span 3; width: 100%; border-radius: 26px; font: 700 21px/1 var(--stencil); letter-spacing: 0.22em; text-transform: uppercase; color: #fbe9d4; background: radial-gradient(120% 140% at 50% 20%, #e0573a 0 40%, #b8391f 70%, #7e2412); box-shadow: 0 0 0 3px #a8904f, 0 0 0 4.5px #3a2a15, 0 5px 0 1.5px #4a130a, 0 8px 18px rgba(184, 57, 31, 0.5); text-shadow: 0 1px 0 rgba(60, 10, 0, 0.6); }
-.pad .fire:not(:disabled) { animation: armed 1.8s var(--ease) infinite; }
-@keyframes armed { 50% { box-shadow: 0 0 0 3px #a8904f, 0 0 0 4.5px #3a2a15, 0 5px 0 1.5px #4a130a, 0 8px 28px rgba(255, 90, 60, 0.75); } }
-.pad .fire:disabled { opacity: 1; color: rgba(251, 233, 212, 0.45); background: radial-gradient(120% 140% at 50% 20%, #6b4a3e 0 40%, #4e342b 70%, #33211b); box-shadow: 0 0 0 3px #7c6a45, 0 0 0 4.5px #3a2a15, 0 5px 0 1.5px #1a120a; }
-.phase-deploy .pad .fire:not(:disabled) { color: #231c14; background: radial-gradient(120% 140% at 50% 20%, #fbf5e7 0 45%, #ded2b8 72%, #c9bb9c); text-shadow: none; animation: none; }
+
+/* ---------- the switch plate ---------- */
+.pad {
+  --k: 54px; --r: 13px; --bz: 3px; --travel: 3px; --so: 5px; --ss: 11px;
+  position: relative; isolation: isolate;
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px 10px; justify-items: center; align-items: center;
+  padding: 17px 14px 19px; border-radius: 10px;
+  background:
+    var(--screw) left var(--so) top var(--so) / var(--ss) var(--ss) no-repeat, var(--screw) right var(--so) top var(--so) / var(--ss) var(--ss) no-repeat,
+    var(--screw) left var(--so) bottom var(--so) / var(--ss) var(--ss) no-repeat, var(--screw) right var(--so) bottom var(--so) / var(--ss) var(--ss) no-repeat,
+    /* wear: hands and screwdrivers have darkened the brass around every screw head */
+    radial-gradient(circle var(--ss) at calc(var(--so) + var(--ss) / 2) calc(var(--so) + var(--ss) / 2), rgba(36, 22, 4, 0.55) 40%, rgba(36, 22, 4, 0.2) 70%, rgba(36, 22, 4, 0)),
+    radial-gradient(circle var(--ss) at calc(100% - var(--so) - var(--ss) / 2) calc(var(--so) + var(--ss) / 2), rgba(36, 22, 4, 0.55) 40%, rgba(36, 22, 4, 0.2) 70%, rgba(36, 22, 4, 0)),
+    radial-gradient(circle var(--ss) at calc(var(--so) + var(--ss) / 2) calc(100% - var(--so) - var(--ss) / 2), rgba(36, 22, 4, 0.55) 40%, rgba(36, 22, 4, 0.2) 70%, rgba(36, 22, 4, 0)),
+    radial-gradient(circle var(--ss) at calc(100% - var(--so) - var(--ss) / 2) calc(100% - var(--so) - var(--ss) / 2), rgba(36, 22, 4, 0.55) 40%, rgba(36, 22, 4, 0.2) 70%, rgba(36, 22, 4, 0)),
+    var(--brass-light), var(--brass-tarnish), var(--brass-grain), var(--brass-base);
+  box-shadow: inset 0 1px 0 rgba(255, 238, 195, 0.6), inset 0 -2px 0 rgba(50, 32, 6, 0.6), inset 0 0 0 1px rgba(50, 32, 8, 0.5), 0 3px 0 #2e1e08, 0 9px 18px rgba(0, 0, 0, 0.6);
+}
+
+/* a key: glossy walnut bakelite, slightly domed, rounded square */
+.pad button {
+  --t: 0px;
+  --d: calc(var(--travel) - var(--t));          /* the bakelite side still showing above the plate */
+  --bx: var(--bz); --by: var(--bz);            /* how far the hole (or guard) reaches past the cap */
+  --edge-hi: rgba(255, 225, 195, 0.5); --edge-lo: rgba(0, 0, 0, 0.35); --inner: rgba(0, 0, 0, 0.3);
+  --side: var(--bk-side); --cast: rgba(0, 0, 0, 0.5); --halo: 0 0 transparent;
+  position: relative; top: var(--t); width: var(--k); height: var(--k); border-radius: var(--r);
+  display: grid; place-items: center;
+  font: 700 28px/1 var(--stencil); color: var(--cream);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.75), 0 1px 0 rgba(255, 210, 180, 0.22);
+  background:
+    radial-gradient(38% 16% at 34% 13%, rgba(255, 244, 230, 0.55), rgba(255, 244, 230, 0) 100%),
+    linear-gradient(180deg, rgba(255, 232, 205, 0.26) 0, rgba(255, 232, 205, 0.06) 18%, transparent 34%),
+    radial-gradient(70% 55% at 32% 30%, rgba(255, 200, 170, 0.18), transparent 70%),
+    radial-gradient(40% 30% at 72% 78%, rgba(150, 70, 40, 0.3), transparent 70%),
+    radial-gradient(30% 22% at 22% 70%, rgba(20, 5, 0, 0.22), transparent 70%),
+    linear-gradient(180deg, var(--bk-hi), var(--bk) 55%, var(--bk-lo));
+  box-shadow:
+    inset 0 1px 0 var(--edge-hi), inset 0 -2px 1px var(--edge-lo),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.18), inset 0 0 7px var(--inner),
+    0 var(--d) 0 var(--side),
+    0 calc(var(--d) + 2px) calc(var(--d) + 2px) var(--cast),
+    var(--halo);
+  transition: top 0.06s ease-out, box-shadow 0.06s ease-out, color 0.15s;
+}
+/* the hole in the plate the key rises out of: it stays still while the key travels */
+.pad button::before {
+  content: ""; position: absolute; z-index: -1;
+  inset: calc(-1 * var(--by) - var(--t)) calc(-1 * var(--bx)) calc(var(--t) - var(--by));
+  border-radius: calc(var(--r) + var(--bz));
+  background: linear-gradient(180deg, #070302, #1c1107 70%, #35240f);
+  box-shadow: inset 0 2px 2px rgba(0, 0, 0, 0.9), 0 0 0 1.5px rgba(70, 46, 12, 0.6), 0 1px 0 1.5px rgba(255, 232, 180, 0.32);
+  transition: inset 0.06s ease-out;
+}
+/* hover: the key lifts a hair and catches more lamplight (no filters: a filter would lift the hole above the key) */
+.pad button:hover:not(:disabled) {
+  --t: -1px; --bk-hi: #8a4630; --bk: #5e2718; --bk-lo: #3a150b; --iv-hi: #fffbf1; --iv: #f3e7cb; --iv-lo: #d6c39a; --red-hi: #ee6649; --red: #bc311d;
+  color: #fff7e2;
+}
+/* pressed: the full travel, the side gone, the shadow collapsed under the cap */
+.pad button:active:not(:disabled) {
+  --t: var(--travel); --edge-hi: rgba(255, 225, 195, 0.3); --edge-lo: rgba(0, 0, 0, 0.3); --cast: rgba(0, 0, 0, 0.65);
+  --bk-hi: #5a2a1a; --bk: #3f190e; --bk-lo: #260c06; --iv-hi: #efe4c8; --iv: #dccca6; --iv-lo: #bba77c; --red-hi: #c2442d; --red: #921f11;
+}
+/* focus: the surround lights up like a backlit key, cream line, dark keeper, warm glow */
+.pad button:focus-visible::before { box-shadow: inset 0 2px 2px rgba(0, 0, 0, 0.9), 0 0 0 2.5px #fff1c8, 0 0 0 4.5px #2a1606, 0 0 16px 5px rgba(255, 196, 100, 0.85); }
+
+/* in the aim: the key sits a little down and darker, the paint worn thin in the engraving (still legible) */
+.pad button.used {
+  --t: 1px; --bk-hi: #5a2b1b; --bk: #3d180d; --bk-lo: #240b05; --edge-hi: rgba(255, 225, 195, 0.36);
+  color: #9a7d62; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.7), 0 1px 0 rgba(241, 228, 196, 0.2);
+}
+.pad button.used:hover:not(:disabled) { --t: 0px; color: #b39478; }
+
+/* chinagraph marks */
+.pad button.out::after, .pad button.in::after, .pad.marking button[data-d]::after {
+  content: ""; position: absolute; inset: -3px; pointer-events: none; background-position: center; background-size: 100% 100%; background-repeat: no-repeat;
+}
+.pad button.out { color: rgba(241, 228, 196, 0.5); }
+.pad button.out::after { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M9 35.5C17 30 27 22.5 39.5 12.5' fill='none' stroke='%23300' stroke-opacity='.5' stroke-width='4.6' stroke-linecap='round' transform='translate(0 1)'/%3E%3Cpath d='M9 35.5C17 30 27 22.5 39.5 12.5' fill='none' stroke='%23ff5a3c' stroke-width='4' stroke-linecap='round'/%3E%3Cpath d='M10.5 33.6C19 27.6 28 21 38.5 12.6' fill='none' stroke='%23ffb09a' stroke-width='1' stroke-linecap='round' stroke-dasharray='5 2 8 3' opacity='.8'/%3E%3C/svg%3E"); }
+.pad button.in::after { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M33 8.5C41.5 12 43.5 25 38 33.5 32 42.5 16.5 43 10.5 34 5 25.5 9.5 11.5 20.5 8.5 27 6.8 33.5 8.2 37.5 12' fill='none' stroke='%23200' stroke-opacity='.45' stroke-width='3.6' stroke-linecap='round' transform='translate(0 1)'/%3E%3Cpath d='M33 8.5C41.5 12 43.5 25 38 33.5 32 42.5 16.5 43 10.5 34 5 25.5 9.5 11.5 20.5 8.5 27 6.8 33.5 8.2 37.5 12' fill='none' stroke='%23f2a93b' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E"); }
+
+/* disabled: the key is locked nearly flush with the plate, matte, dry and hatched */
+.pad button:disabled {
+  --t: calc(var(--travel) - 1px); --side: #120804; --cast: rgba(0, 0, 0, 0.35);
+  opacity: 1; color: rgba(241, 228, 196, 0.2); text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.5);
+  background: repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.16) 0 3px, transparent 3px 7px), linear-gradient(180deg, #3d2a22, #2c1d17);
+  box-shadow: inset 0 1px 0 rgba(255, 225, 195, 0.08), inset 0 0 0 1px rgba(0, 0, 0, 0.3), 0 var(--d) 0 var(--side);
+}
+
+/* marking mode: every digit shows a faint chinagraph circle waiting to be drawn */
+.pad.marking button[data-d]:not(.in):not(.out)::after { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M33 8.5C41.5 12 43.5 25 38 33.5 32 42.5 16.5 43 10.5 34 5 25.5 9.5 11.5 20.5 8.5 27 6.8 33.5 8.2 37.5 12' fill='none' stroke='%23f2a93b' stroke-width='2.2' stroke-linecap='round' stroke-dasharray='3 4' opacity='.8'/%3E%3C/svg%3E"); }
+.pad.marking button[data-d] { cursor: crosshair; }
+
+/* ---------- function keys: ivory bakelite with engraved icons ---------- */
+.pad svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linejoin: round; stroke-linecap: round; filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.6)); }
+.pad .del, .pad .mark, .pad .rand, .phase-deploy .pad .fire:not(:disabled) {
+  --edge-hi: #fff; --edge-lo: rgba(90, 64, 30, 0.35); --inner: rgba(90, 64, 30, 0.12); --side: var(--iv-side);
+  color: #3a2616; text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.7) 0, rgba(255, 255, 255, 0.15) 18%, transparent 36%),
+    radial-gradient(60% 40% at 70% 80%, rgba(160, 130, 80, 0.25), transparent 70%),
+    linear-gradient(180deg, var(--iv-hi), var(--iv) 55%, var(--iv-lo));
+}
+.pad .rand svg circle { fill: currentColor; }
+.pad .del:active, .pad .rand:active, .pad .mark:active,
+.phase-deploy .pad .fire:not(:disabled):active { --edge-hi: rgba(255, 255, 255, 0.7); --edge-lo: rgba(90, 64, 30, 0.3); }
+.pad .del:hover, .pad .mark:hover, .pad .rand:hover { color: #1c1008; }
+
+/* pencil on: an amber key latched down, lit from inside like the pilot lamp, with a soft halo */
+.pad .mark[aria-pressed="true"] {
+  --t: calc(var(--travel) - 1px); --side: #5a3006; --edge-hi: rgba(255, 250, 220, 0.9); --edge-lo: rgba(110, 50, 0, 0.35); --inner: rgba(110, 50, 0, 0.1);
+  --halo: 0 0 14px 4px rgba(255, 164, 44, 0.55);
+  color: #3a1c04; text-shadow: none;
+  background:
+    linear-gradient(180deg, rgba(255, 250, 220, 0.6) 0, rgba(255, 250, 220, 0.1) 18%, transparent 36%),
+    radial-gradient(70% 60% at 50% 55%, #ffe39a, transparent 75%),
+    linear-gradient(180deg, #ffc65a, #eb9a22 60%, #b86a0e);
+}
+.pad .mark[aria-pressed="true"] svg { filter: drop-shadow(0 1px 0 rgba(255, 240, 200, 0.7)); }
+.pad .mark[aria-pressed="true"]::before { box-shadow: inset 0 0 6px rgba(255, 170, 50, 0.8), 0 0 0 1.5px rgba(255, 190, 90, 0.8), 0 0 18px 6px rgba(255, 160, 40, 0.45); }
+
+/* ---------- FIRE: a red bakelite push key sunk in a brass guard ---------- */
+.pad .fire {
+  --r: 12px; --bx: 13px; --by: 6px; --gap: 3px; --side: var(--red-side); --cast: rgba(0, 0, 0, 0.55);
+  --edge-hi: rgba(255, 210, 190, 0.6); --edge-lo: rgba(0, 0, 0, 0.35); --inner: rgba(40, 0, 0, 0.25);
+  /* the pilot lamp, set into the key face: glass, nickel keeper ring, and its light on the bakelite */
+  --lamp-pos: left 2px center; --lamp-core: #fff2d8; --lamp-mid: #ff5a2c; --lamp-lo: #8a1004; --lamp-glow: rgba(255, 120, 70, 0.4); --lamp-hot: rgba(255, 246, 224, 0.95);
+  --lamp:
+    radial-gradient(circle 2.2px at 17.6px 16.8px, var(--lamp-hot), rgba(255, 246, 224, 0)) var(--lamp-pos) / 38px 38px no-repeat,
+    radial-gradient(circle 6.4px at 19px 19px, var(--lamp-core) 0, var(--lamp-mid) 42%, var(--lamp-lo) 88%, rgba(0, 0, 0, 0) 100%) var(--lamp-pos) / 38px 38px no-repeat,
+    radial-gradient(circle 10px at 19px 19px, rgba(0, 0, 0, 0) 5.6px, #2a0a04 6px 6.8px, #eadcb8 7.2px, #b4a78a 8.4px, #4a4234 9.2px, rgba(0, 0, 0, 0.35) 9.4px, rgba(0, 0, 0, 0) 10px) var(--lamp-pos) / 38px 38px no-repeat,
+    radial-gradient(circle 19px at 19px 19px, var(--lamp-glow), rgba(0, 0, 0, 0)) var(--lamp-pos) / 38px 38px no-repeat;
+  --face:
+    linear-gradient(180deg, rgba(255, 220, 200, 0.45) 0, rgba(255, 220, 200, 0.12) 18%, transparent 38%),
+    radial-gradient(60% 70% at 30% 20%, rgba(255, 150, 120, 0.3), transparent 70%),
+    linear-gradient(180deg, var(--red-hi), var(--red) 55%, var(--red-lo));
+  grid-column: span 3; justify-self: stretch; width: auto; margin-inline: 13px; padding-left: 26px;
+  font: 700 24px/1 var(--stencil); letter-spacing: 0.2em; text-indent: 0.2em; text-transform: uppercase; color: var(--cream);
+  text-shadow: 0 -1px 0 rgba(40, 0, 0, 0.8), 0 1px 0 rgba(255, 190, 160, 0.3);
+  background: var(--lamp), var(--face);
+}
+/* the guard: a brass collar with its own screws, and a shaded dark-brass well the key drops into */
+.pad .fire::before {
+  border: solid transparent; border-width: calc(var(--by) - var(--gap)) calc(var(--bx) - var(--gap));
+  border-radius: calc(var(--r) + var(--bx)) / calc(var(--r) + var(--by));
+  background:
+    var(--screw) left 1px center / 9px 9px no-repeat border-box, var(--screw) right 1px center / 9px 9px no-repeat border-box,
+    linear-gradient(180deg, #120a03, #2c1e0c 45%, #5c4620 85%, #8a6d36) padding-box,
+    linear-gradient(180deg, rgba(255, 244, 214, 0.55), rgba(255, 244, 214, 0) 22%, rgba(0, 0, 0, 0) 60%, rgba(30, 16, 2, 0.45)) border-box,
+    radial-gradient(40% 60% at 90% 70%, rgba(54, 60, 30, 0.35), rgba(54, 60, 30, 0) 70%) border-box,
+    linear-gradient(180deg, #c9a660, #9c7c3e 40%, #6e5424 80%, #4c3814) border-box;
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.85), inset 0 -1px 0 rgba(255, 226, 160, 0.35), 0 -1px 0 rgba(255, 240, 205, 0.5), 0 2px 0 #2e1e08, 0 4px 7px rgba(0, 0, 0, 0.55);
+}
+/* armed: a slow ember glow breathes out from under the guard (opacity only, so it costs next to nothing) */
+.pad .fire::after {
+  content: ""; position: absolute; z-index: -2; inset: -24px -30px; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(255, 84, 36, 0.8) 30%, rgba(255, 84, 36, 0.3) 66%, rgba(255, 84, 36, 0));
+  opacity: 0.5;
+}
+.pad .fire:not(:disabled)::after { animation: armed 1.8s var(--ease) infinite alternate; }
+@keyframes armed { to { opacity: 1; } }
+
+/* not ready: the enamel dull oxblood, the lamp cold, the stencil a dry cut-in with no paint in it */
+.pad .fire:disabled {
+  --t: calc(var(--travel) - 1px); --side: #1a0c08; --cast: rgba(0, 0, 0, 0.45);
+  --lamp-core: #7d6a62; --lamp-mid: #3e231c; --lamp-lo: #150906; --lamp-glow: rgba(0, 0, 0, 0); --lamp-hot: rgba(255, 240, 225, 0.35);
+  --face: linear-gradient(180deg, rgba(255, 220, 200, 0.08) 0, transparent 30%), radial-gradient(110% 130% at 50% 30%, #5a3a33 0 30%, #452a24 65%, #2c1a16 100%);
+  background: var(--lamp), var(--face);
+  color: rgba(18, 7, 4, 0.66); text-shadow: 0 1px 0 rgba(255, 210, 190, 0.16), 0 -1px 0 rgba(0, 0, 0, 0.25);
+  box-shadow: inset 0 1px 0 rgba(255, 210, 190, 0.14), inset 0 3px 6px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(0, 0, 0, 0.3), 0 var(--d) 0 var(--side), 0 calc(var(--d) + 2px) 3px var(--cast);
+}
+.pad .fire:disabled::after { display: none; }
+.pad .fire:disabled::before { filter: saturate(0.75) brightness(0.9); }
+
+/* focus on FIRE: the guard is ringed the same way as every other key */
+.pad .fire:focus-visible::before { box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.85), 0 0 0 2.5px #fff1c8, 0 0 0 4.5px #2a1606, 0 0 16px 5px rgba(255, 196, 100, 0.85); }
+
+/* deploy: LOCK is an ivory key, the lamp a cold white, nothing breathes */
+.phase-deploy .pad .fire:not(:disabled) {
+  --lamp-core: #ffffff; --lamp-mid: #f6ecd0; --lamp-lo: #a8946a; --lamp-glow: rgba(255, 246, 220, 0.35);
+  --face:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.7) 0, rgba(255, 255, 255, 0.15) 18%, transparent 36%),
+    radial-gradient(60% 40% at 70% 80%, rgba(160, 130, 80, 0.25), transparent 70%),
+    linear-gradient(180deg, var(--iv-hi), var(--iv) 55%, var(--iv-lo));
+  background: var(--lamp), var(--face);
+  color: #2b1c10; text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7), 0 -1px 0 rgba(90, 60, 20, 0.35);
+}
+.phase-deploy .pad .fire::after { animation: none; display: none; }
+
 .phase-deploy .pad .mark, .phase-battle .pad .rand { display: none; }
-.pad.marking button[data-d] { box-shadow: 0 0 0 3px #e0a534, 0 0 0 4.5px #3a2a15, 0 5px 0 1.5px #1a120a, 0 8px 12px rgba(0, 0, 0, 0.55); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pad .fire:not(:disabled)::after { animation: none; opacity: 0.75; }
+  .pad button, .pad button::before, .slots span { transition: none; }
+}
 
 /* supplies: a manila dossier with a clipped photograph */
 .w-supply { left: calc(50% + 190px); bottom: calc(var(--barH) + 4px); width: 318px; border-radius: 2px 12px 3px 3px; background: var(--tex-manila), #d8be8b; color: var(--ink-paper); box-shadow: inset 0 1px 0 rgba(255, 245, 215, 0.6), inset 0 -2px 0 rgba(90, 60, 20, 0.25), 0 18px 36px rgba(0, 0, 0, 0.55); }
@@ -278,7 +535,10 @@ body[data-screen="match"] #manualBtn, body[data-screen="match"] #soundBtn, body[
 #manualDlg .muted, #manualDlg ol, #manualDlg .supplies { color: #4a3f33; font-size: 14px; }
 #manualDlg ol b, #manualDlg .supplies b { color: var(--ink-paper); }
 #manualDlg .eyebrow { color: var(--pencil); font-family: var(--typed); }
-#manualDlg .legend figure, #manualDlg .example { background: rgba(255, 255, 255, 0.35); box-shadow: inset 0 0 0 1px rgba(90, 79, 68, 0.25); }
+#manualDlg .legend figure, #manualDlg .example { border-radius: 1px; background: rgba(255, 252, 240, 0.55); box-shadow: 0 1px 3px rgba(60, 40, 20, 0.25); rotate: -0.4deg; }
+#manualDlg .legend figure:nth-child(2) { rotate: 0.5deg; }
+#manualDlg .win-bar span { margin: 0; }
+#manualDlg .tiles i { background: #f7f1e3; box-shadow: inset 0 0 0 1.5px rgba(43, 36, 29, 0.6); color: var(--ink-paper); font: 700 16px/1 var(--typed); border-radius: 2px; }
 #manualDlg .legend figcaption { color: #4a3f33; }
 #manualDlg .example p { color: #4a3f33; }
 #manualDlg .manual .d, #manualDlg .d { color: #b3301c; }
@@ -305,15 +565,29 @@ body.cine .hud, body.cine .desk, body.cine .bar, body.cine .note, body.cine .top
 /* ---- wide screens: the fire control board lies long and low, under the squad --------------- */
 @media (min-width: 1180px) {
   .w-aim { width: 724px; margin-left: -362px; }
-  .w-aim .w-body { display: grid; grid-template-columns: auto auto; justify-content: center; align-items: center; gap: 22px; padding: 0 18px 16px; }
+  .w-aim .w-body { display: grid; grid-template-columns: auto auto; justify-content: center; align-items: center; gap: 14px; padding: 0 12px 16px; }
   .phase-deploy .w-aim .w-body { grid-template-columns: auto; }
   .recent { display: none; }
-  .slots { margin: 0; gap: 8px; }
-  .slots span { width: 52px; height: 60px; font-size: 36px; }
-  .pad { grid-template-columns: repeat(5, 52px) 52px 104px; grid-auto-rows: 52px; gap: 12px 10px; }
+  .slots { --so: 4px; --ss: 10px; margin: 0; gap: 6px; padding: 8px 18px 10px; }
+  .slots span { width: 42px; height: 56px; font-size: 32px; }
+  .slots span:empty:first-of-type::after, .slots span:not(:empty) + span:empty::after { left: 10px; right: 10px; bottom: 10px; height: 4px; }
+  .slots span:empty:first-of-type::before, .slots span:not(:empty) + span:empty::before { bottom: -9px; }
+  .pad { --k: 46px; --r: 11px; --so: 4px; --ss: 9px; grid-template-columns: repeat(6, var(--k)) 80px; grid-auto-rows: var(--k); gap: 13px 12px; padding: 14px; }
+  .pad button { font-size: 24px; }
   .pad .del { grid-column: 6; grid-row: 1; }
   .pad .mark, .pad .rand { grid-column: 6; grid-row: 2; }
-  .pad .fire { grid-column: 7; grid-row: 1 / span 2; height: 100%; border-radius: 16px; font-size: 22px; letter-spacing: 0.16em; writing-mode: horizontal-tb; }
+  .pad .fire {
+    --bx: 6px; --by: 13px; --lamp-pos: center top -3px;
+    grid-column: 7; grid-row: 1 / span 2; justify-self: center; align-self: center; margin: 0; width: 68px; height: calc(100% - 12px);
+    padding: 26px 0 0; font-size: 19px; letter-spacing: 0.1em; text-indent: 0.1em;
+  }
+  .pad .fire::before { background:
+      var(--screw) center top 1px / 9px 9px no-repeat border-box, var(--screw) center bottom 1px / 9px 9px no-repeat border-box,
+      linear-gradient(180deg, #120a03, #2c1e0c 45%, #5c4620 85%, #8a6d36) padding-box,
+      linear-gradient(180deg, rgba(255, 244, 214, 0.55), rgba(255, 244, 214, 0) 12%, rgba(0, 0, 0, 0) 70%, rgba(30, 16, 2, 0.45)) border-box,
+      radial-gradient(60% 40% at 80% 80%, rgba(54, 60, 30, 0.35), rgba(54, 60, 30, 0) 70%) border-box,
+      linear-gradient(180deg, #c9a660, #9c7c3e 40%, #6e5424 80%, #4c3814) border-box; }
+  .pad .fire::after { inset: -34px -24px; }
   .w-chat { top: calc(var(--pad) + var(--top) + 90px); bottom: auto; }
   .w-supply { left: auto; right: calc(50% - 362px); bottom: calc(var(--barH) + 196px); }
 }
@@ -353,10 +627,13 @@ body.cine .hud, body.cine .desk, body.cine .bar, body.cine .note, body.cine .top
   .tb-group { margin: 0 4px; }
 }
 @media (max-width: 380px) {
-  .pad { gap: 10px 6px; }
-  .pad button { width: 48px; height: 48px; font-size: 21px; }
-  .slots span { width: 50px; height: 56px; font-size: 32px; }
-  .w-aim .w-body { padding-inline: 10px; }
+  .w-aim .w-body { padding-inline: 6px; }
+  .pad { --k: 48px; --r: 11px; --bz: 3px; --so: 3px; --ss: 8px; gap: 12px 7px; padding: 14px 10px; }
+  .pad button { font-size: 27px; }
+  .pad .fire { --bx: 12px; --by: 5px; font-size: 22px; margin-inline: 12px; padding-left: 24px; --lamp-pos: left 0 center; }
+  .slots { --so: 6px; --ss: 10px; gap: 7px; padding: 7px 22px 8px; }
+  .slots span { width: 48px; height: 54px; font-size: 32px; }
+  .slots span:empty:first-of-type::after, .slots span:not(:empty) + span:empty::after { left: 11px; right: 11px; bottom: 10px; }
   .plank { padding-inline: 10px; }
 }
 /* The narrowest phones: the crate count rides on the supply group as a badge, so the icons keep
@@ -379,6 +656,5 @@ body.cine .hud, body.cine .desk, body.cine .bar, body.cine .note, body.cine .top
 @media (max-height: 700px) and (max-width: 899px) {
   .slots { margin-bottom: 10px; }
   .slots span { height: 50px; }
-  .pad { gap: 9px 10px; }
-  .pad button { width: 46px; height: 46px; }
+  .pad { --k: 48px; gap: 11px 8px; padding: 13px 12px 15px; }
 }

@@ -358,7 +358,7 @@ class App {
       if (this.screen === "match") {
         // Set by the bar and the keypad's height, open or not, so opening windows never moves the camera.
         const bar = $("bar").getBoundingClientRect().height || 72;
-        if (b.classList.contains("phase-deploy") || b.classList.contains("phase-battle")) bottom = innerWidth < 900 ? (bar + 300) * 0.9 : innerWidth < 1180 ? (bar + 330) * 0.62 : (bar + 184) * 0.6;
+        if (b.classList.contains("phase-deploy") || b.classList.contains("phase-battle")) bottom = innerWidth < 900 ? (bar + 360) * 0.9 : innerWidth < 1180 ? (bar + 375) * 0.62 : (bar + 190) * 0.6;
         else if (b.classList.contains("phase-supply")) bottom = bar + 20;
         else if (b.classList.contains("phase-over")) bottom = innerWidth < 900 ? 220 : 0;
         top = innerWidth < 900 ? 100 : 50;

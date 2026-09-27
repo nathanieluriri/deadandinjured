@@ -72,6 +72,7 @@ export class Desk {
     this.raise(name, true);
     if (was !== "open") {
       w.el.hidden = false;
+      w.el.inert = false;
       this.animate(w, "in");
       this.onOpen?.(name);
       if (byUser) this.sound?.("open", name);
@@ -84,6 +85,7 @@ export class Desk {
     const w = this.wins.get(name);
     if (!w || w.state !== "open") return;
     w.state = "min";
+    w.el.inert = true;
     this.drop(name);
     const hadFocus = w.el.contains(document.activeElement);
     this.animate(w, "min");
@@ -97,6 +99,7 @@ export class Desk {
     if (!w || w.state === "closed") return;
     const was = w.state;
     w.state = "closed";
+    w.el.inert = true;
     this.drop(name);
     const hadFocus = w.el.contains(document.activeElement);
     if (was === "open") this.animate(w, "close");
@@ -180,6 +183,7 @@ export class Desk {
       w.anim?.cancel();
       w.state = "closed";
       w.el.hidden = true;
+      w.el.inert = true;
     }
     this.order = [];
     this.changed(false);

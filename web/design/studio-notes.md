@@ -14,7 +14,17 @@ Shipped as planned: orders, supply switches, the crates split, the match clock a
 - **Every window is an object**: fire control is a wooden board with round typewriter keys and a red firing button; each supply is a manila dossier with a photograph clipped to it, and the photograph is a live scene (the plane crossing and dropping its flare, a helmet in the scope, a canister rolling out smoke); the log is a leather field notebook with paper index tabs and ruled pages written in pencil and ink; taunts are a message pad of torn slips. Minimise and close are two brass studs.
 - **Pause** is a brass stud in the top corner. Its menu is a typed sheet of standing orders on a clipboard.
 - **Phones** show one window at a time as a sheet rising from the plank; the plank's width is budgeted so it never runs off the screen from 320 px up.
-- **The keypad's keys** were redone after the owner rejected the first version: four designers built it in four directions (vintage typewriter, celluloid and nickel, bakelite field telephone, a steel fire-control panel), three judges scored the renders, and the winner was refined with the best details of the others.
+- **The keypad's keys** were redone after the owner rejected the first version: four designers built it in four directions (vintage typewriter, celluloid and nickel, bakelite field telephone, a steel fire-control panel), three judges scored the renders (bakelite 172, celluloid 165, fire panel 165, typewriter 163), and the winner was refined with the best details of the others: oxblood bakelite keys with stencilled cream numerals in an aged brass switch plate, the code in a brass strip of ivory drums with an amber cursor, and FIRE as a red bakelite key with a pilot lamp, sunk in a brass guard.
+
+### Review
+
+- Art director: every piece is wood, brass, paper or clay, lit by the dusk; nothing reads as a web panel. The end of the match is next (phase 3).
+- Game designer: each supply's window says why it cannot go out as its headline; the explanation shrinks to one line once used; supplies that are off leave the bar.
+- UX designer: solid states (dimmed clay, a padlock, grey clay), open and in-front markers, labels on hover, focus and long press; phones show one sheet at a time; pause from the corner, Esc or P.
+- Cinematographer: the camera's inset is set by the board's size, so opening windows never moves it; the squad stays in view.
+- Animation and sound: windows rise out of their icons and sink back; icons lift on hover and the gun pulses on your turn; paper, fold and knock sounds.
+- QA: engine, server and browser tests green; phone and desktop screenshots; the bar at 320 to 412 px and every window at 320, 360 and 390 px; keyboard paths with and without reduce motion.
+- Accessibility and performance: every icon is a real, labelled button in a sensible Tab order with a visible focus mark; reduce motion honoured; supply previews draw only while their dossier is open.
 
 ## Phase 3: the end of the match, staged in the world
 
