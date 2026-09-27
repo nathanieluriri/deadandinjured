@@ -52,8 +52,8 @@ A thin horizontal crop of the Windows 11 taskbar in dark mode: a row of twelve a
 
 - The owner's intent: replace the current Aim / Supplies / Log tab switcher at the bottom of the match screen with a taskbar of **3D icons**, one per tool.
 - Each tool opens as a window (the keypad, the supplies, the log) that can be **minimised** back into its icon or **closed**, with a marker under the icon while it is open.
-- "3D icons" means small rendered objects in the game's clay toy style (for example a keypad or cannon for Aim, a supply crate for Supplies, a notebook for the Log) rather than the flat line icons used now.
-- The supplies themselves are meant to become three 3D icons as well (see screenshots 01 and 03), so the Supplies icon could open a small tray of the three.
+- "3D icons" means small rendered objects in the game's clay toy style rather than the flat line icons used now.
+- Decided afterwards (the owner: "PLANE, SCOPE, LOG, CLOUD, CHAT, ETC"): the bar holds a field gun (Aim, the keypad), the plane (Recon), the scope (Sniper), the cloud (Smoke), a notebook (Log) and a speech bubble (Chat). The supplies sit on the bar themselves, with a small crate counter beside them. Pause stays in the top corner. The full plan is in [`../redesign-requests.md`](../redesign-requests.md), request 1.
 - Mobile needs thought: a taskbar row fits a phone well, but "windows" on a phone would open as panels from the bottom.
 
 ## Colour (sampled from the screenshot)
