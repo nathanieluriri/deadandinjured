@@ -259,7 +259,7 @@ body[data-screen="match"] .toast { top: calc(var(--pad) + var(--top) + 160px); }
 /* ---- preloader ---------------------------------------------------------------------------- */
 .pre { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: var(--ink-1); transition: opacity 0.9s var(--ease), visibility 0s 0.9s; }
 .pre.live { background: transparent; }
-.pre.gone { opacity: 0; visibility: hidden; }
+.pre.gone { opacity: 0; visibility: hidden; pointer-events: none; }
 .icon .pre, .icon .grain, .icon .shade { display: none; }
 html.icon, body.icon { background: transparent; }
 .pre-in { display: grid; justify-items: center; gap: 22px; padding: 24px; text-align: center; margin-top: 4vh; }

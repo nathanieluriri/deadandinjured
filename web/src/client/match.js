@@ -433,7 +433,7 @@ export class MatchView {
       this.input = "";
       this.renderSlots();
       for (const b of this.el.rps.querySelectorAll("button")) b.classList.remove("picked");
-      await this.dir.shot("supply", prev ? 1.2 : 0.01);
+      await (this.app.title.exitTo("supply") || this.dir.shot("supply", prev ? 1.2 : 0.01));
       this.banner("Supply draw");
       this.note(this.drawNote(s));
     } else if (phase === "deploy") {

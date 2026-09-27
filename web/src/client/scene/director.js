@@ -20,6 +20,13 @@ const other = (side) => (side === "me" ? "opp" : "me");
 
 const SHOTS = {
   title: { pos: [0, 2.8, 21], look: [0, 7.2, -16], fov: 44, kp: 1.3 },
+  // The places of the trench network behind our left flank, framed where they are.
+  corner: { pos: [-11.0, 2.4, 14.8], look: [-14.8, 1.6, 6.8], fov: 50, kp: 1, narrow: { pos: [-14.6, 3.0, 16.6], look: [-15.6, 1.8, 7.0], fov: 56 } },
+  board: { pos: [-14.95, 1.65, 8.2], look: [-17.05, 1.28, 8.9], fov: 46, kp: 1, narrow: { pos: [-13.4, 1.75, 8.0], look: [-17.05, 1.28, 8.9] } },
+  war: { pos: [-13.6, 1.9, 17.2], look: [-13.2, 0.85, 20.3], fov: 58, kp: 1, narrow: { pos: [-13.5, 2.2, 17.25], look: [-13.25, 0.75, 20.0] } },
+  signals: { pos: [-17.35, 1.66, 14.35], look: [-18.75, 1.3, 17.4], fov: 58, kp: 1, narrow: { pos: [-17.6, 1.7, 14.1], look: [-18.6, 1.35, 17.4], fov: 60 } },
+  radio: { pos: [-9.6, 1.9, 22.4], look: [-9.6, 1.0, 26.6], fov: 52, kp: 1, narrow: { pos: [-9.6, 2.1, 21.9], look: [-9.6, 1.0, 26.4] } },
+  front: { pos: [0, 2.0, -9.6], look: [0, 1.3, -16.8], fov: 42, kp: 1, narrow: { pos: [0, 2.3, -3.2], look: [0, 1.3, -16.8] } },
   home: { pos: [0, 4.4, 17.2], look: [0, 1.1, -5], fov: 40, kp: 1.45 },
   deploy: { pos: [0, 2.9, 15.4], look: [0, 1.05, 9.6], fov: 38 },
   supply: { pos: [0, 4.4, 2.6], look: [0, 4.4, -7], fov: 44, kp: 1.3 },
@@ -159,7 +166,7 @@ export class Director {
   // A journey through the world in one take: the camera rides a smooth curve through the
   // waypoints, looking a little ahead of itself as a walking operator would, and settles on the
   // framing of the shot it is going to. Under reduced motion it cross-fades instead.
-  travel(name, via = [], { dur = null, ease = "sine.inOut" } = {}) {
+  travel(name, via = [], { dur = null, ease = "sine.inOut", ahead: lead = true } = {}) {
     const to = this.shotFor(name);
     gsap.killTweensOf([this.pos, this.look, this]);
     this.journey?.kill();
@@ -185,7 +192,8 @@ export class Director {
           aim.subVectors(ahead, this.pos);
           if (aim.lengthSq() > 1e-6) aim.setLength(6).add(this.pos);
           else aim.copy(to.look);
-          this.look.copy(look0).lerp(aim, smooth(0, 0.3, s.u)).lerp(to.look, smooth(0.55, 1, s.u));
+          if (lead) this.look.copy(look0).lerp(aim, smooth(0, 0.3, s.u)).lerp(to.look, smooth(0.55, 1, s.u));
+          else this.look.copy(look0).lerp(to.look, smooth(0, 1, s.u));
           this.fov = fov0 + (to.fov - fov0) * smooth(0.4, 1, s.u);
         },
         onComplete: () => {

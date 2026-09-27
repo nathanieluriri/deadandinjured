@@ -45,56 +45,45 @@
 </header>
 
 <main>
-  <section class="screen menu" id="menu" aria-label="Main menu">
-    <div class="menu-in">
-      <p class="tag">A live code-breaking war game</p>
-      <nav class="menu-list">
-        <button type="button" class="item" data-open="soloSub"><i>01</i><span>Play the computer</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
-        <div class="sub" id="soloSub" hidden>
-          <button type="button" class="chip" data-level="recruit"><span class="pips" aria-hidden="true"><i></i><i></i><i></i></span>Recruit<small>Fires half blind</small></button>
-          <button type="button" class="chip" data-level="sergeant"><span class="pips" aria-hidden="true"><i></i><i></i><i></i></span>Sergeant<small>Never wastes a shot</small></button>
-          <button type="button" class="chip" data-level="general"><span class="pips" aria-hidden="true"><i></i><i></i><i></i></span>General<small>Reads every volley</small></button>
-        </div>
-        <button type="button" class="item" data-open="friendSub"><i>02</i><span>Play a friend</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
-        <div class="sub" id="friendSub" hidden>
-          <button type="button" class="chip" id="createBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Open a room<small>Share the code</small></button>
-          <form class="join" id="joinForm" autocomplete="off">
-            <input id="joinCode" name="code" maxlength="5" placeholder="ROOM CODE" aria-label="Room code" autocapitalize="characters" spellcheck="false">
-            <button type="submit" class="btn">Join</button>
-          </form>
-        </div>
-        <button type="button" class="item" id="quickBtn"><i>03</i><span>Quick match</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
-        <button type="button" class="item" id="boardBtn"><i>04</i><span>Leaderboard</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
-      </nav>
-      <p class="who" id="who"></p>
-    </div>
-  </section>
-
-  <section class="screen wait" id="wait" aria-label="Waiting for an opponent">
-    <div class="win card">
-      <div class="win-bar"><i></i><i></i><i></i><span>room.open</span><em id="waitState">waiting</em></div>
-      <div class="win-body">
-        <p class="eyebrow">Room code</p>
-        <p class="code" id="roomCode">-----</p>
-        <p class="muted">Send this code or the link to a friend. The match starts the moment they arrive.</p>
-        <div class="row">
-          <button type="button" class="btn" id="shareBtn">Share the link</button>
-          <button type="button" class="btn ghost" id="cancelWait">Cancel</button>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="screen search" id="search" aria-label="Quick match">
-    <div class="win card">
-      <div class="win-bar"><i></i><i></i><i></i><span>radio.search</span><em id="searchState">scanning</em></div>
-      <div class="win-body">
-        <div class="scan"><div class="radar" aria-hidden="true"><i></i></div><div><p class="big" id="searchText">Scanning for an opponent</p><p class="muted" id="searchNote">Anyone who taps Quick match now is paired with you.</p></div></div>
-        <div class="row">
-          <button type="button" class="btn" id="searchSolo">Play the computer</button>
-          <button type="button" class="btn ghost" id="cancelSearch">Cancel</button>
-        </div>
-      </div>
+  <section class="screen menu" id="menu" aria-label="The trench">
+    <h1 class="vh">Dead &amp; Injured, a live code-breaking war game</h1>
+    <div class="hots" id="hots"></div>
+    <button type="button" class="back-tag" id="backBtn" hidden><span>Back</span></button>
+    <p class="slip" id="placeNote" role="status"></p>
+    <div class="sheets">
+      <section class="sheet dossier" id="ordersSheet" hidden aria-label="Your orders">
+        <div id="ordersForm"></div>
+        <div class="sheet-row"><button type="button" class="stamp-btn" id="ordersGo">To the front</button></div>
+      </section>
+      <section class="sheet notepad" id="dialSheet" hidden aria-label="Dial a room">
+        <form id="joinForm" autocomplete="off">
+          <p class="sheet-head">Dial your friend's room</p>
+          <label class="dial"><span class="vh">Room code, five letters and digits</span><input id="joinCode" name="code" maxlength="5" autocapitalize="characters" spellcheck="false" autocomplete="off"><span class="dial-tiles" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></label>
+          <div class="sheet-row"><button type="submit" class="stamp-btn" id="joinGo">Ring them</button></div>
+        </form>
+      </section>
+      <section class="sheet telegram" id="joinSheet" hidden aria-label="The host's orders">
+        <div id="joinTg"></div>
+        <div class="sheet-row"><button type="button" class="stamp-btn" id="joinAccept">Accept</button><button type="button" class="link-btn" id="joinDecline">Hang up</button></div>
+      </section>
+      <section class="sheet notepad" id="waitSheet" hidden aria-label="Your room">
+        <p class="sheet-head">Room open</p>
+        <p class="room-code" id="roomCode">-----</p>
+        <p class="sheet-note">Send the code or the link to a friend. The match starts the moment they pick up.</p>
+        <div class="sheet-row"><button type="button" class="stamp-btn" id="shareBtn">Share the link</button><button type="button" class="link-btn" id="cancelWait">Close the room</button></div>
+      </section>
+      <section class="sheet clip" id="quickSheet" hidden aria-label="Quick match">
+        <p class="sheet-head" id="searchText" role="status">Scanning the airwaves</p>
+        <div id="quickForm"></div>
+      </section>
+      <section class="sheet roll" id="rollSheet" hidden aria-label="Roll of honour">
+        <p class="sheet-head">Roll of honour</p>
+        <table class="board"><thead><tr><th>#</th><th>Callsign</th><th>W</th><th>L</th><th title="Soldiers killed">KIA</th></tr></thead><tbody id="boardBody"></tbody></table>
+      </section>
+      <section class="sheet notepad" id="tagSheet" hidden aria-label="Your dog tag">
+        <p class="sheet-head">Your dog tag</p>
+        <p class="who" id="who"></p>
+      </section>
     </div>
   </section>
 
@@ -287,16 +276,6 @@
   </div>
 </dialog>
 
-<dialog class="dlg" id="boardDlg">
-  <div class="win">
-    <div class="win-bar"><i></i><i></i><i></i><span>leaderboard</span></div>
-    <div class="win-body">
-      <p class="big">The decorated</p>
-      <table class="board"><thead><tr><th>#</th><th>Callsign</th><th>W</th><th>L</th><th title="Soldiers killed">KIA</th></tr></thead><tbody id="boardBody"></tbody></table>
-      <div class="row"><button type="button" class="btn" data-close>Close</button></div>
-    </div>
-  </div>
-</dialog>
 
 
 <dialog class="pause" id="pauseDlg" aria-labelledby="pauseTitle">

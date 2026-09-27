@@ -14,15 +14,20 @@ const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--ena
 
 async function open() {
   const ctx = await browser.newContext({ viewport: { width: 800, height: 600 } });
+  await ctx.addInitScript(() => localStorage.setItem("di.intro", "1"));
   const page = await ctx.newPage();
   await page.goto(`${BASE}/?nolag`, { waitUntil: "load" });
   await page.waitForFunction(() => !document.getElementById("enterBtn").disabled, null, { timeout: 120000 });
   await page.click("#enterBtn");
+  await page.waitForFunction(() => document.body.dataset.place === "corner" && !window.__app.title.busy, null, { timeout: 60000 });
   return page;
 }
 
+// The quick match plank on the signpost walks to the radio post, which asks for a callsign. The
+// plank's button is pressed from inside the page: a headless page that is not in front paints
+// no frames, and Playwright's pointer clicks wait on frames.
 async function enlistVia(page, name) {
-  await page.click("#quickBtn");
+  await page.evaluate(() => document.getElementById("quickBtn").click());
   await page.waitForSelector("#enlistDlg[open]");
   await page.fill("#enlistName", name);
   await page.click("#enlistGo");
@@ -31,7 +36,7 @@ async function enlistVia(page, name) {
 const a = await open();
 const b = await open();
 await enlistVia(a, `Quick${tag}A`);
-await a.waitForFunction(() => document.body.dataset.screen === "search", null, { timeout: 30000 });
+await a.waitForFunction(() => document.body.dataset.place === "radio" && !!window.__app.lobby, null, { timeout: 30000 });
 await enlistVia(b, `Quick${tag}B`);
 for (const p of [a, b]) await p.waitForFunction(() => window.__app.view.s?.phase === "supply", null, { timeout: 60000 });
 const names = await a.evaluate(() => [window.__app.view.s.me.name, window.__app.view.s.opp.name]);

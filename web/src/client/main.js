@@ -10,6 +10,7 @@ import { IconDeck } from "./scene/icons.js";
 import { paintTextures, canvases } from "./textures.js";
 import { Sfx } from "./audio.js";
 import { MatchView } from "./match.js";
+import { Title } from "./title.js";
 import { RemoteMatch, LocalMatch, quickMatch } from "./net.js";
 import { ROOM_RE, STANDARD_ORDERS, cleanOrders } from "../shared/rules.js";
 import { LEVELS } from "./ai.js";
@@ -101,7 +102,7 @@ class App {
     await frame();
     this.director = new Director({ stage: this.stage, world: this.world, army: this.army, fx: this.fx, sfx: this.sfx });
     this.director.onParadeEnd = () => this.parade(false);
-    this.director.applyShot("title", true);
+    this.director.applyShot("corner", true);
     this.director.titleShow(true);
     this.fx.warm();
     this.stage.renderer.compile(this.stage.scene, this.stage.camera);
@@ -112,6 +113,7 @@ class App {
     await frame();
     this.director.titleShow(false);
     this.view = new MatchView(this);
+    this.title = new Title(this);
     this.bindIcons();
     this.bindUi();
     this.bindPause();
@@ -173,10 +175,8 @@ class App {
     document.body.classList.remove("is-pre");
     this.sfx.mood("menu");
     const room = location.pathname.match(/^\/r\/([A-Za-z0-9]{5})\/?$/);
-    if (room) {
-      this.director.shot("home", 0.01);
-      this.join(room[1].toUpperCase());
-    } else this.menu(true);
+    this.menu(true, !room);
+    if (room) this.title.link(room[1].toUpperCase());
   }
 
   show(name) {
@@ -375,9 +375,11 @@ class App {
           bottom = below ? innerHeight - $("over").getBoundingClientRect().top + 8 : bar;
         }
         top = innerWidth < 900 ? 100 : 50;
-      } else if (this.screen === "menu") {
-        bottom = innerWidth < 900 ? Math.min(330, innerHeight * 0.42) : 0;
-      } else if (this.screen === "wait" || this.screen === "search") bottom = innerWidth < 900 ? 280 : 120;
+      } else if (this.screen === "menu" && innerWidth < 900) {
+        // An open sheet takes the bottom of a phone, so the place moves up above it.
+        const sheet = [...document.querySelectorAll("#menu .sheet")].find((x) => !x.hidden);
+        bottom = sheet ? innerHeight - sheet.getBoundingClientRect().top : 0;
+      }
       this.stage.setInset(Math.round(top), Math.round(bottom), this.screen === "match");
     });
   }
@@ -409,30 +411,6 @@ class App {
       $("manualDlg").showModal();
     });
     for (const b of document.querySelectorAll("[data-close]")) b.addEventListener("click", () => b.closest("dialog").close("cancel"));
-    for (const item of document.querySelectorAll("#menu [data-open]")) {
-      item.addEventListener("click", () => {
-        const sub = $(item.dataset.open);
-        const open = sub.hidden;
-        for (const s of document.querySelectorAll(".sub")) s.hidden = true;
-        for (const i of document.querySelectorAll("#menu [data-open]")) i.setAttribute("aria-expanded", "false");
-        sub.hidden = !open;
-        item.setAttribute("aria-expanded", String(open));
-        this.sfx.play("click");
-        this.layout();
-      });
-    }
-    for (const b of document.querySelectorAll("[data-level]")) b.addEventListener("click", () => this.solo(b.dataset.level));
-    $("createBtn").addEventListener("click", () => this.create());
-    $("joinForm").addEventListener("submit", (e) => {
-      e.preventDefault();
-      this.join($("joinCode").value.trim().toUpperCase());
-    });
-    $("quickBtn").addEventListener("click", () => this.quick());
-    $("boardBtn").addEventListener("click", () => this.board());
-    $("cancelWait").addEventListener("click", () => this.home());
-    $("cancelSearch").addEventListener("click", () => this.home());
-    $("searchSolo").addEventListener("click", () => this.solo("sergeant"));
-    $("shareBtn").addEventListener("click", () => this.share());
     $("enlistSwap").addEventListener("click", () => this.enlistMode(!this.signingIn));
     $("enlistCancel").addEventListener("click", () => $("enlistDlg").close("cancel"));
     $("enlistForm").addEventListener("submit", (e) => this.enlistSubmit(e));
@@ -440,6 +418,7 @@ class App {
     $("who").addEventListener("click", (e) => {
       const a = e.target.closest("[data-act]");
       if (!a) return;
+      if (a.dataset.act === "intro") this.title.replayIntro();
       if (a.dataset.act === "secure") $("secureDlg").showModal();
       if (a.dataset.act === "signin") this.needCallsign(true);
       if (a.dataset.act === "signout") this.signOut();
@@ -460,13 +439,15 @@ class App {
   renderWho() {
     const w = $("who");
     const p = this.me;
+    const intro = `<button type="button" class="link" data-act="intro">Replay the intro</button>`;
     if (!p) {
-      w.innerHTML = `<span>No callsign yet.</span><button type="button" class="link" data-act="signin">Sign in</button>`;
+      w.innerHTML = `<span>No callsign yet. You get one the first time you play someone live.</span><button type="button" class="link" data-act="signin">Sign in</button>${intro}`;
       return;
     }
-    const rec = p.wins + p.losses + p.draws ? `${p.wins} won, ${p.losses} lost` : "no live matches yet";
-    w.innerHTML = `<span>Callsign <b>${escapeHtml(p.name)}</b></span><span>${rec}</span>` +
-      (p.secured ? `<button type="button" class="link" data-act="signout">Sign out</button>` : `<button type="button" class="link" data-act="secure">Add a password</button>`);
+    const rec = p.wins + p.losses + p.draws ? `${p.wins} won, ${p.losses} lost${p.draws ? `, ${p.draws} drawn` : ""}` : "no live matches yet";
+    const solo = (p.soloWins || 0) + (p.soloLosses || 0) + (p.soloDraws || 0) ? `Against the computer ${p.soloWins || 0} won, ${p.soloLosses || 0} lost, ${p.soloDraws || 0} drawn` : "";
+    w.innerHTML = `<span>Callsign <b>${escapeHtml(p.name)}</b></span><span>${rec}</span>${solo ? `<span>${solo}</span>` : ""}` +
+      (p.secured ? `<button type="button" class="link" data-act="signout">Sign out</button>` : `<button type="button" class="link" data-act="secure">Add a password</button>`) + intro;
   }
 
   async refreshMe() {
@@ -474,17 +455,21 @@ class App {
     this.renderWho();
   }
 
-  menu(first = false) {
+  // The title: back in the trench corner, walked to from wherever the camera is. The first
+  // visit in a browser flies in over the field.
+  menu(first = false, intro = true) {
     this.show("menu");
     this.view.stop();
     this.director.resetField();
     this.parade(true);
     this.director.rpsShow(false);
-    this.director.shot("title", first ? 0.01 : 1.6);
-    if (first || !this.director.titleGroup.visible) this.director.titleIn();
+    this.director.titleShow(false);
+    let seen = true;
+    try {
+      seen = localStorage.getItem("di.intro") === "1";
+    } catch {}
+    this.title.home({ first, intro: first && intro && !seen });
     this.sfx.mood("menu");
-    for (const s of document.querySelectorAll(".sub")) s.hidden = true;
-    for (const i of document.querySelectorAll("#menu [data-open]")) i.setAttribute("aria-expanded", "false");
     if (location.pathname !== "/") history.replaceState(null, "", "/");
   }
 
@@ -505,15 +490,10 @@ class App {
     this.menu();
   }
 
+  // A room waits in the signals dugout; once both sides are in, the match takes the screen.
   onPhase(phase) {
-    if (phase === "lobby") {
-      if (this.screen !== "wait") this.show("wait");
-      return;
-    }
-    if (this.screen !== "match") {
-      this.show("match");
-      if (this.director.titleGroup.visible) this.director.titleOut();
-    }
+    if (phase === "lobby") return;
+    if (this.screen !== "match") this.show("match");
   }
 
   async needCallsign(signIn = false) {
@@ -592,7 +572,6 @@ class App {
     this.lobby = null;
     const name = this.me?.name || "You";
     this.show("match");
-    this.director.titleOut();
     const view = this.view;
     view.start(null, { solo: true, level });
     view.conn = new LocalMatch(level, name, (m) => view.message(m), this.orders);
@@ -600,45 +579,48 @@ class App {
   }
 
   async create() {
-    if (!(await this.needCallsign())) return;
+    if (!(await this.needCallsign())) return null;
     try {
       const { code } = await api("/api/rooms", { orders: this.orders });
       this.openRoom(code, true);
+      return code;
     } catch (err) {
       this.toast(err.message);
+      return null;
     }
   }
 
-  async join(code) {
+  // A room's host and orders, before joining it.
+  async peekRoom(code) {
     if (!ROOM_RE.test(code)) {
       this.sfx.play("error");
-      return this.toast("Room codes are five letters and digits");
+      this.toast("Room codes are five letters and digits");
+      return null;
     }
-    if (!(await this.needCallsign())) {
-      if (this.screen !== "menu") this.menu();
-      return;
-    }
+    if (!(await this.needCallsign())) return null;
     try {
       const { room } = await api(`/api/rooms/${code}`);
-      if (!room) {
-        this.toast("No room with that code");
-        if (this.screen !== "menu") this.menu();
-        return;
-      }
-      this.openRoom(code, false);
+      if (!room) this.toast("No room with that code");
+      return room || null;
     } catch (err) {
       this.toast(err.message);
+      return null;
     }
   }
 
-  openRoom(code, host) {
+  cancelRoom() {
+    this.view.stop();
+    if (location.pathname !== "/") history.replaceState(null, "", "/");
+  }
+
+  cancelLobby() {
+    this.lobby?.cancel();
+    this.lobby = null;
+  }
+
+  openRoom(code) {
     this.lobby = null;
     history.replaceState(null, "", `/r/${code}`);
-    $("roomCode").textContent = code;
-    $("waitState").textContent = "waiting";
-    if (host) this.show("wait");
-    if (this.director.titleGroup.visible) this.director.titleOut();
-    this.director.shot("home", 1.4);
     const view = this.view;
     view.start(null, { solo: false });
     view.conn = new RemoteMatch(code, (m) => view.message(m), (status) => this.netStatus(status));
@@ -674,38 +656,36 @@ class App {
     } catch {}
   }
 
+  // Quick match from the radio post: random orders on the clipboard, which can be changed while
+  // the radio searches.
   async quick() {
-    if (!(await this.needCallsign())) return;
-    this.show("search");
-    if (this.director.titleGroup.visible) this.director.titleOut();
-    this.director.shot("far", 1.6);
-    $("searchText").textContent = "Scanning for an opponent";
-    $("searchState").textContent = "scanning";
+    if (!(await this.needCallsign())) return this.title.back();
+    const orders = this.title.quickOrders();
+    $("searchText").textContent = "Scanning the airwaves";
     this.lobby = quickMatch({
-      orders: STANDARD_ORDERS,
+      orders,
       onQueue: (n) => {
-        $("searchText").textContent = n > 1 ? `${n} soldiers on the radio` : "Scanning for an opponent";
+        $("searchText").textContent = n > 1 ? `${n} soldiers on the radio` : "Scanning the airwaves";
       },
       onMatched: (code) => {
         this.lobby = null;
-        $("searchState").textContent = "found";
+        $("searchText").textContent = "Contact. Stand by";
         this.sfx.play("found");
-        this.openRoom(code, false);
+        this.openRoom(code);
       },
       onFail: () => {
         this.toast("Lost the radio. Try again.");
-        this.home();
+        this.title.back();
       },
     });
   }
 
   async board() {
-    this.sfx.play("click");
     const body = $("boardBody");
-    body.innerHTML = '<tr><td colspan="5">Loading</td></tr>';
-    $("boardDlg").showModal();
+    body.innerHTML = '<tr><td colspan="5">Reading the roll</td></tr>';
     try {
       const { players } = await api("/api/leaderboard");
+      this.network.roll(players);
       body.innerHTML = players.length
         ? players.map((p, i) => `<tr class="${p.name === this.me?.name ? "me" : ""}"><td>${i + 1}</td><td>${escapeHtml(p.name)}</td><td>${p.wins}</td><td>${p.losses}</td><td>${p.kills}</td></tr>`).join("")
         : '<tr><td colspan="5">No live matches fought yet. Be the first.</td></tr>';

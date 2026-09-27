@@ -102,6 +102,8 @@ export class Network {
     this.parts = [];
     this.glass = [];
     this.touch = {};
+    this.anchors = {};
+    this.swing = {};
     this.time = 0;
   }
 
@@ -157,6 +159,8 @@ export class Network {
     this.put(l.frame, x - 2.25, 1.45, z + 1.6);
     this.put(l.glass, x - 2.25, 1.45, z + 1.6, 0, this.glass);
     // The field manual on a crate, and the field radio on the firestep.
+    this.anchors.manual = new THREE.Vector3(x - 1.7, 0.66, z + 1.3);
+    this.anchors.sound = new THREE.Vector3(x + 1.2, 0.85, z - 1.8);
     this.put(tint(box(0.62, 0.55, 0.5, 0.03), 0x7a5431), x - 1.7, 0.28, z + 1.3, 0.2);
     this.put(join([[box(0.36, 0.08, 0.26, 0.02), 0x5e3822], [box(0.34, 0.06, 0.24, 0.01).translate(0.005, 0.005, 0), K.paper]]), x - 1.7, 0.6, z + 1.3, 0.5);
     this.put(join([
@@ -225,6 +229,13 @@ export class Network {
       }
     });
     const mat = new THREE.MeshLambertMaterial({ map: atlas });
+    // Your dog tag, hung on a nail on the post.
+    const tag = join([
+      [box(0.09, 0.14, 0.01, 0.02), 0xb8b3a6],
+      [cyl(0.004, 0.004, 0.22, 4).rotateZ(0.6).translate(-0.03, 0.12, 0), 0x8a857c],
+    ]);
+    this.put(tag, sx + 0.08, 1.05, sz + 0.075);
+    this.anchors.tag = new THREE.Vector3(sx + 0.08, 1.05, sz + 0.08);
     this.signs = SIGNS.map((s, i) => {
       const shape = new THREE.Shape();
       const L = 1.55;
@@ -256,6 +267,7 @@ export class Network {
       pivot.add(plank);
       this.group.add(pivot);
       this.touch[s.key] = pivot;
+      this.anchors[s.key] = new THREE.Vector3(0.72, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), s.yaw).add(pivot.position);
       return { ...s, pivot, plank };
     });
   }
@@ -270,7 +282,7 @@ export class Network {
     this.boardPaper.position.set(x + 0.06, 1.25, z);
     this.boardPaper.rotation.y = PI / 2;
     this.group.add(this.boardPaper);
-    this.touch.board = this.touch.board || this.boardPaper;
+    this.anchors.roll = new THREE.Vector3(x + 0.06, 1.25, z);
   }
 
   // The communication trench back from the corner to the war room: sandbags on the left,
@@ -386,6 +398,7 @@ export class Network {
     dossier.rotation.y = -0.2;
     this.group.add(dossier);
     this.touch.dossier = dossier;
+    this.anchors.dossier = dossier.position.clone();
     // Five crates stacked by the back wall, one for each crate the orders can give.
     const crates = new THREE.Group();
     for (let i = 0; i < 5; i++) {
@@ -434,19 +447,24 @@ export class Network {
     this.put(sandbagWall(2.6, 6), -15.3, 0, 14.9, PI);
     this.put(duckboard(2.4, 0.7), -15.4, 0, 14.1);
     this.dugout(x, z, 3.6, 4, { door: "right", doorAt: -1.5 });
-    this.put(tint(box(1.4, 0.07, 0.5, 0.02), T.plankLight), x - 0.9, 0.95, z - 0.4, PI / 2);
+    // The telephone on a shelf under the chalkboard, both on the back wall facing the door.
+    this.put(tint(box(1.5, 0.07, 0.46, 0.02), T.plankLight), x - 0.1, 0.95, z + 1.6);
+    for (const dx of [-0.65, 0.45]) this.put(tint(box(0.06, 0.95, 0.06, 0.02), T.post), x + dx, 0.47, z + 1.7);
     const phone = new THREE.Mesh(fieldPhone(), this.mat);
-    phone.scale.setScalar(0.5);
-    phone.position.set(x - 1.05, 0.99, z - 0.4);
-    phone.rotation.y = PI / 2;
+    phone.scale.setScalar(0.46);
+    phone.position.set(x - 0.35, 0.99, z + 1.55);
+    phone.rotation.y = PI + 0.25;
     this.group.add(phone);
     this.touch.phone = phone;
-    this.chalkboard = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.8), new THREE.MeshLambertMaterial({ color: 0x23291f }));
-    this.chalkboard.position.set(x - 0.1, 1.5, z + 1.93);
+    this.anchors.phone = phone.position.clone().add(new THREE.Vector3(0, 0.25, 0));
+    this.chalkboard = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.62), new THREE.MeshLambertMaterial({ color: 0x23291f }));
+    this.chalkboard.position.set(x - 0.1, 1.84, z + 1.72);
     this.chalkboard.rotation.y = PI;
     this.group.add(this.chalkboard);
-    this.put(tint(box(1.42, 0.92, 0.04, 0.02), T.post), x - 0.1, 1.5, z + 1.97);
+    this.put(tint(box(1.3, 0.72, 0.04, 0.02), T.post), x - 0.1, 1.84, z + 1.75);
     this.touch.chalkboard = this.chalkboard;
+    this.anchors.chalkboard = this.chalkboard.position.clone().add(new THREE.Vector3(0.25, -0.05, 0));
+    this.chalk("");
     this.lamp(x - 1.5, 1.7, z + 1.2);
   }
 
@@ -478,6 +496,7 @@ export class Network {
     radio.rotation.y = PI;
     this.group.add(radio);
     this.touch.radio = radio;
+    this.anchors.radio = radio.position.clone().add(new THREE.Vector3(0, 0.05, 0));
     this.put(tint(box(0.08, 4.2, 0.08, 0.02), T.post), x + 1.9, 2.1, z + 2.3);
     this.put(tint(cyl(0.006, 0.006, 2.4, 4).rotateZ(1.2), K.metal), x + 0.95, 3.1, z + 1.6);
     const clip = new THREE.Group();
@@ -485,6 +504,7 @@ export class Network {
     clip.position.set(x - 1.3, 1.35, z - 1.02);
     this.group.add(clip);
     this.touch.clipboard = clip;
+    this.anchors.clipboard = clip.position.clone();
     this.lamp(x + 1.2, 2.0, z - 1.0);
   }
 
@@ -511,9 +531,35 @@ export class Network {
       plate.position.set(-2.4 + i * 2.4, 0.4, -16.18);
       plate.rotation.x = -0.25;
       this.plates.add(plate);
+      this.anchors[["recruit", "sergeant", "general"][i]] = plate.position.clone();
     });
     this.plates.visible = false;
     this.group.add(this.plates);
+  }
+
+  // The roll of honour pinned to the notice board: the first names, typed.
+  roll(players) {
+    const tex = this.rollTex || (this.rollTex = paint(512, 350, () => {}));
+    const c = tex.image.getContext("2d");
+    c.fillStyle = "#e6dcc2";
+    c.fillRect(0, 0, 512, 350);
+    c.fillStyle = "#2b241d";
+    c.textAlign = "center";
+    c.font = '700 34px "Stardos Stencil", sans-serif';
+    c.fillText("ROLL OF HONOUR", 256, 44);
+    c.fillRect(60, 58, 392, 3);
+    c.textAlign = "left";
+    c.font = '700 22px "Courier Prime", monospace';
+    (players || []).slice(0, 9).forEach((p, i) => {
+      c.fillText(`${i + 1}. ${p.name}`, 64, 94 + i * 28);
+      c.textAlign = "right";
+      c.fillText(`${p.wins}`, 448, 94 + i * 28);
+      c.textAlign = "left";
+    });
+    tex.needsUpdate = true;
+    this.boardPaper.material.map = tex;
+    this.boardPaper.material.color.set(0xd8cfba);
+    this.boardPaper.material.needsUpdate = true;
   }
 
   // The title's own set dressing on the enemy side, shown with the commanders.
@@ -521,8 +567,52 @@ export class Network {
     this.plates.visible = on;
   }
 
+  // Chalks a room's code (or nothing) on the signals dugout's board.
+  chalk(code) {
+    const tex = this.chalkTex || (this.chalkTex = paint(512, 320, () => {}));
+    const c = tex.image.getContext("2d");
+    const W = 512;
+    const H = 320;
+    c.fillStyle = "#23291f";
+    c.fillRect(0, 0, W, H);
+    const r = seeded(11);
+    for (let i = 0; i < 40; i++) {
+      c.fillStyle = `rgba(230, 230, 220, ${0.02 + r() * 0.04})`;
+      c.beginPath();
+      c.ellipse(r() * W, r() * H, 20 + r() * 60, 6 + r() * 14, r() * 3, 0, Math.PI * 2);
+      c.fill();
+    }
+    c.fillStyle = "rgba(240, 238, 228, 0.9)";
+    c.textAlign = "center";
+    c.textBaseline = "middle";
+    c.font = '700 44px "Caveat", cursive';
+    c.fillText(code ? "Room code" : "Signals", W / 2, 64);
+    if (code) {
+      c.font = '700 132px "Caveat", cursive';
+      c.fillText(code.split("").join(" "), W / 2, 188);
+    } else {
+      c.font = '700 38px "Caveat", cursive';
+      c.fillText("Open a room, or dial a friend's code", W / 2, 180);
+    }
+    tex.needsUpdate = true;
+    this.chalkboard.material.map = tex;
+    this.chalkboard.material.color.set(0xffffff);
+    this.chalkboard.material.needsUpdate = true;
+  }
+
+  // A plank or a prop lifts or swings a little while it is pointed at.
+  hover(key, on) {
+    this.swing[key] = on ? 1 : 0;
+  }
+
   update(dt) {
     this.time += dt;
+    for (const s of this.signs || []) {
+      const to = this.swing[s.key] || 0;
+      s.k = (s.k || 0) + (to - (s.k || 0)) * (1 - Math.exp(-dt * 10));
+      s.plank.rotation.x = Math.sin(this.time * 7) * 0.05 * s.k;
+      s.plank.position.y = s.k * 0.03;
+    }
     const b = this.bannerMesh;
     if (b && this.visible !== false) {
       const p = b.geometry.attributes.position;

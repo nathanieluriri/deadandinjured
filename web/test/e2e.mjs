@@ -20,6 +20,7 @@ const proxy = remote && process.env.HTTPS_PROXY ? [`--proxy-server=${process.env
 const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", ...proxy] });
 async function player(name) {
   const ctx = await browser.newContext({ viewport: { width: 900, height: 640 } });
+  await ctx.addInitScript(() => localStorage.setItem("di.intro", "1"));
   const page = await ctx.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -46,16 +47,31 @@ const A = await player(`Alpha${stamp}`);
 const B = await player(`Bravo${stamp}`);
 console.log("enlisted", A.name, B.name);
 
-await A.page.click("[data-open=friendSub]");
-await A.page.click("#createBtn");
-await until(A, () => document.getElementById("roomCode").textContent.length === 5 && document.body.dataset.screen === "wait");
+const at = (p, place) => until(p, (n) => document.body.dataset.place === n && !window.__app.title.busy, place, 60000);
+// The objects' buttons are pressed from inside the page, the way a keyboard or a screen reader
+// does: a headless page that is not in front paints no frames, and Playwright's pointer clicks
+// wait on frames.
+const hot = (p, sel) => p.page.evaluate((s) => document.querySelector(`#hots ${s}`).click(), sel);
+for (const p of [A, B]) await at(p, "corner");
+await hot(A, ".hot[aria-label='Play a friend']");
+await at(A, "signals");
+await hot(A, "#createBtn");
+await at(A, "war");
+await A.page.click("#ordersGo");
+await at(A, "signals");
+await until(A, () => document.getElementById("roomCode").textContent.length === 5 && !document.getElementById("waitSheet").hidden);
 const code = await A.page.evaluate(() => document.getElementById("roomCode").textContent);
 console.log("room", code);
 await shot(A, "1-wait");
 
-await B.page.click("[data-open=friendSub]");
+await hot(B, ".hot[aria-label='Play a friend']");
+await at(B, "signals");
+await hot(B, ".hot[aria-label=\"Dial a friend's code\"]");
 await B.page.fill("#joinCode", code);
-await B.page.click("#joinForm button[type=submit]");
+await B.page.click("#joinGo");
+await B.page.waitForSelector("#joinSheet:not([hidden])");
+console.log("the host's orders:", await B.page.evaluate(() => document.getElementById("joinTg").innerText.replace(/\s+/g, " ")));
+await B.page.click("#joinAccept");
 for (const p of [A, B]) await until(p, () => window.__app.view.s?.phase === "supply");
 console.log("both in the supply draw");
 

@@ -1,0 +1,57 @@
+/* The title, lived in the trench: real buttons laid over the objects, paper tags, a typed slip
+   for each place, and paper sheets for orders, dialling, the clipboard and the roll of honour. */
+body[data-screen="menu"] .brand, body[data-screen="menu"] #manualBtn, body[data-screen="menu"] #soundBtn { display: none; }
+#menu { z-index: 6; }
+.hots { position: absolute; inset: 0; pointer-events: none; }
+.hot { position: absolute; left: 0; top: 0; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; pointer-events: auto; -webkit-tap-highlight-color: transparent; }
+.hot.sign { width: 190px; height: 46px; margin: -23px 0 0 -95px; border-radius: 6px; }
+.hot:focus-visible { box-shadow: none; outline: 2px dashed rgba(239, 231, 214, 0.9); outline-offset: 2px; }
+.hot-tag { position: absolute; left: 50%; top: calc(100% + 2px); translate: -50% 0; padding: 5px 10px 4px 16px; background: radial-gradient(circle at 7px 50%, transparent 2.2px, #b99d6d 2.6px, #b99d6d 3.8px, transparent 4.2px), var(--tex-pad), #efe8d6; color: var(--ink-paper); font: 700 13px/1.1 var(--typed); white-space: nowrap; border-radius: 2px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45); rotate: -2deg; transition: translate 0.25s var(--out), rotate 0.25s var(--out); pointer-events: none; }
+.hot:hover .hot-tag, .hot:focus-visible .hot-tag { translate: -50% -2px; rotate: 0deg; }
+.hot[aria-pressed="false"] .hot-tag { text-decoration: line-through; text-decoration-thickness: 2px; text-decoration-color: rgba(163, 48, 29, 0.8); }
+
+.back-tag { position: absolute; top: calc(var(--pad) + var(--top) + 6px); left: var(--pad); min-height: 44px; padding: 0 16px 0 26px; background: radial-gradient(circle at 12px 50%, transparent 3px, #b99d6d 3.4px, #b99d6d 5px, transparent 5.4px), var(--tex-pad), #efe8d6; color: var(--ink-paper); font: 700 15px/44px var(--typed); border-radius: 3px; box-shadow: 0 5px 12px rgba(0, 0, 0, 0.5); rotate: -2deg; }
+.back-tag::before { content: "\2190"; margin-right: 6px; }
+.back-tag:hover { rotate: 0deg; }
+.back-tag[hidden] { display: none; }
+
+.slip { position: absolute; top: calc(var(--pad) + var(--top) + 8px); left: 50%; translate: -50% 0; width: max-content; max-width: min(460px, calc(100vw - 180px)); margin: 0; padding: 8px 14px 7px; background: var(--tex-pad), #efe8d6; color: var(--ink-paper-2); font: 400 13px/1.35 var(--typed); text-align: center; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45); rotate: -0.6deg; pointer-events: none; }
+.slip:empty { display: none; }
+
+.sheets { position: absolute; top: calc(var(--pad) + var(--top) + 70px); right: var(--pad); width: min(400px, calc(100vw - 2 * var(--pad))); max-height: calc(100% - var(--pad) - var(--top) - 90px); overflow: auto; overscroll-behavior: contain; display: grid; gap: 14px; padding: 6px 10px 20px; scrollbar-width: thin; }
+.sheet { position: relative; padding: 16px 18px; color: var(--ink-paper); box-shadow: 0 2px 0 rgba(255, 255, 240, 0.35) inset, 0 18px 40px rgba(0, 0, 0, 0.55); rotate: -0.6deg; animation: sheetIn 0.45s var(--out); }
+.sheet[hidden] { display: none; }
+@keyframes sheetIn { from { opacity: 0; translate: 0 24px; rotate: 2deg; } }
+.sheet.dossier { background: var(--tex-manila), #d8be8b; border-radius: 3px 10px 3px 3px; }
+.sheet.notepad, .sheet.roll { background: var(--tex-pad), #efe8d6; }
+.sheet.clip { background: var(--tex-paper), #ebe1c9; border-top: 22px solid #6f4d2f; border-radius: 6px 6px 2px 2px; }
+.sheet.clip::before { content: ""; position: absolute; top: -18px; left: 50%; width: 90px; height: 14px; margin-left: -45px; border-radius: 3px; background: linear-gradient(180deg, #d4d0c6, #8a857c); box-shadow: 0 2px 3px rgba(0, 0, 0, 0.5); }
+.sheet-head { margin: 0 0 10px; font: 700 17px/1.1 var(--stencil); letter-spacing: 0.1em; text-transform: uppercase; }
+.sheet-note { margin: 8px 0 0; font: italic 400 13px/1.35 var(--typed); color: var(--pencil); }
+.sheet-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 14px; }
+.stamp-btn { min-height: 44px; padding: 6px 16px 5px; border: 3px solid currentColor; border-radius: 5px; color: #b8391f; font: 700 17px/1.1 var(--stencil); letter-spacing: 0.1em; text-transform: uppercase; rotate: -2deg; box-shadow: inset 0 0 0 2px rgba(184, 57, 31, 0.25); transition: rotate 0.2s var(--out), background 0.2s; }
+.stamp-btn:hover { background: rgba(184, 57, 31, 0.08); rotate: 0deg; }
+.stamp-btn:focus-visible { outline: 2px dashed var(--ink-blue); outline-offset: 3px; }
+.link-btn { min-height: 44px; padding: 0 4px; font: 700 20px/44px var(--hand); color: var(--ink-blue); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+.room-code { margin: 4px 0; font: 700 44px/1 var(--stencil); letter-spacing: 0.24em; color: var(--ink-paper); }
+.dial { position: relative; display: block; }
+.dial input { position: absolute; inset: 0; width: 100%; opacity: 0; font-size: 16px; }
+.dial-tiles { display: flex; gap: 8px; }
+.dial-tiles i { display: grid; place-items: center; width: 44px; height: 52px; border-radius: 3px; background: linear-gradient(180deg, #a57a47, #7a5431); box-shadow: inset 0 0 0 1.5px rgba(40, 22, 8, 0.7), 0 2px 3px rgba(0, 0, 0, 0.35); color: #f3e7cf; font: 700 28px/1 var(--stencil); font-style: normal; }
+.dial-tiles i.on { box-shadow: inset 0 0 0 1.5px rgba(40, 22, 8, 0.7), 0 0 0 2px #ffc15a; }
+.dial:focus-within .dial-tiles i.on { animation: tileBlink 1s steps(2) infinite; }
+@keyframes tileBlink { 50% { box-shadow: inset 0 0 0 1.5px rgba(40, 22, 8, 0.7); } }
+.sheet.roll .board { width: 100%; border-collapse: collapse; font: 400 14px/1.4 var(--typed); }
+.sheet.roll .board th { text-align: left; font-weight: 700; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--pencil); border-bottom: 1px solid rgba(43, 36, 29, 0.3); padding: 4px; }
+.sheet.roll .board td { padding: 5px 4px; border-bottom: 1px dashed rgba(43, 36, 29, 0.2); }
+.sheet.roll .board tr.me td { color: #b8391f; font-weight: 700; }
+#tagSheet .who { display: grid; gap: 6px; margin: 0; font: 400 14px/1.35 var(--typed); color: var(--ink-paper); }
+#tagSheet .who .link { justify-self: start; min-height: 40px; font: 700 19px/40px var(--hand); color: var(--ink-blue); text-decoration: underline; }
+
+@media (max-width: 899px) {
+  .sheets { top: auto; bottom: 0; right: 0; left: 0; width: auto; max-height: 58%; padding: 8px 10px calc(10px + var(--bottom)); }
+  .slip { top: auto; bottom: calc(18px + var(--bottom)); max-width: calc(100vw - 32px); }
+  body[data-screen="menu"]:has(.sheet:not([hidden])) .slip { display: none; }
+  .back-tag { top: calc(var(--pad) + var(--top)); }
+  .hot.sign { width: 150px; margin-left: -75px; }
+}
