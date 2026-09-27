@@ -2,7 +2,14 @@
 
 Collected from the owner's messages on 27 September 2026. **This is a planning document. No code has been written for any of it**, at the owner's request: "PLEASE JUST DOCUMENT FOR NOW DON'T WRITE CODE WE ARE PLANNING AND DOCUMENTING PROPERLY".
 
-It records what was asked (in the owner's own words), what it means, how it will work, the decisions already made, and what is still open. The screenshots and their detailed descriptions are in [`references/`](references/).
+It records what was asked (in the owner's own words), what it means, how it will work, and the decisions already made. Every question has now been answered. The screenshots and their detailed descriptions are in [`references/`](references/).
+
+## For the next agent
+
+- **Read this whole plan first.** Build nothing until the owner says go, then follow the build plan near the end, phase by phase.
+- **Analyze every image in [`references/`](references/) properly before designing or building.** All twelve images are kept in the repository on purpose, at the owner's request ("KEEP THEM IN THE REPO THE NEXT AGENT WILL AND SHOULD ANALYZE THOSE IMAGES"). Open each image itself at full size and zoom into its regions; the written descriptions help, but they are not a substitute for looking.
+- **Do not delete, move, compress or replace any of the images**, including the three from other games (07, 08 and 09). They are references for the approach, not assets: nothing from them is copied into the game.
+- The folder's own [`README.md`](references/README.md) lists every image and how to study it.
 
 ## The requests at a glance
 
@@ -34,6 +41,11 @@ It records what was asked (in the owner's own words), what it means, how it will
 | 11 | How does quick match set a game? | "QUICK MATCH RANDOMLY ASIGNS A SETTNG FOR BOTH PLAYERS THEN THE WINNER OF ROCK PAPER SCISORS IS THE SETTINGS THAT APPLY" | Each player brings settings; the draw picks whose apply (request 8) |
 | 12 | How should moving between title screens look? | "LOOK LIKE ONESHOT" | One continuous camera take, no cuts (request 6) |
 | 13 | A first-time intro flight over the field? | "YEAH WHY NOT" | Plays on the first visit, skippable (request 6) |
+| 14 | "One shot": a continuous camera take, or the game *OneShot*? | "YES I MEANT ONE CONTINUOUS CAMERA TAKE" | The camera never cuts between title screens (request 6) |
+| 15 | Turn length: 45 seconds for 10 minutes, 60 for 15? | "TURN LENGHT IS OKAY" | 30, 45 and 60 seconds for 5, 10 and 15 minute matches |
+| 16 | Playing a friend: whose settings apply? | "PLAYING A FRIEND ONLY THE HOSTS SETTINGS APPLY" | The host's orders, shown to the friend before joining |
+| 17 | Quick match rematch? | "QUICK MATCH A NEW DRAW DECIDES AGAIN" | Each player's own orders go into a new draw |
+| 18 | Keep the reference screenshots from other games in the public repo? | "KEEP THEM IN THE REPO THE NEXT AGENT WILL AND SHOULD ANALYZE THOSE IMAGES SO SPECIFY THAT ALL THOSE IMAGES ARE KEPT TO BE ANALYZED PROPERLY" | All twelve images stay, to be analyzed (see "For the next agent") |
 
 ---
 
@@ -223,7 +235,7 @@ The title is no longer one screen. It is a small part of the front line, and eve
 
 ### What "one shot" means here
 
-Read as the film technique called a **one-shot** (a "oner"): the camera never cuts. Every change of screen is one continuous camera move through the world, the way the First World War film *1917* follows its soldiers through the trenches in what plays as one long continuous shot. (If the owner meant the video game *OneShot*, this section changes; see "Still open".)
+The film technique called a **one-shot** (a "oner"), confirmed by the owner: "YES I MEANT ONE CONTINUOUS CAMERA TAKE". The camera never cuts. Every change of screen is one continuous camera move through the world, the way the First World War film *1917* follows its soldiers through the trenches in what plays as one long continuous shot.
 
 ### The map the camera travels
 
@@ -335,9 +347,9 @@ The winner of rock, paper, scissors gets the number of crates in the orders that
 
 | Time limit | Time per turn |
 |---|---|
-| 5 minutes | 30 seconds (decided) |
-| 10 minutes | 45 seconds (proposed) |
-| 15 minutes | 60 seconds (proposed, today's turn) |
+| 5 minutes | 30 seconds |
+| 10 minutes | 45 seconds |
+| 15 minutes | 60 seconds (today's turn) |
 
 - The match clock starts when the battle starts (after both codes are deployed) and shows in the HUD beside the turn banner (for example "8:42").
 - Three misfires in a row still forfeit.
@@ -359,9 +371,9 @@ The winner of rock, paper, scissors gets the number of crates in the orders that
 | Mode | Orders | Notes |
 |---|---|---|
 | **Play the computer** | yours | Set in the war room before you pick a commander. The computer only uses supplies that are on. |
-| **Play a friend** | the host's | Set when opening the room. The friend sees them as a telegram before joining. (See "Still open": should the friend bring orders too?) |
+| **Play a friend** | **only the host's** (decided) | Set when opening the room. The friend sees them as a telegram before joining and brings no orders of their own. |
 | **Quick match** | **the draw decides** | See below. |
-| **Rematch** | the same as before | In quick match, see "Still open". |
+| **Rematch** | friend room: the host's again; quick match: **a new draw decides again** (decided) | See step 6 below. |
 
 ### Quick match (decided)
 
@@ -370,6 +382,7 @@ The winner of rock, paper, scissors gets the number of crates in the orders that
 3. At the start of the match both sides' orders are shown (two dossiers facing each other across the field) and the rock, paper, scissors draw happens.
 4. **The winner's orders stand** (stamped "ORDERS STAND") and become the match's rules: its supplies, its time limit and turn length. The winner gets that many crates, the loser one fewer and the first shot (or, if those orders have no supplies, the winner fires first).
 5. A drawn throw repeats, as today.
+6. **Rematch**: each player's own orders go into a new rock, paper, scissors draw, and the winner's orders stand again. Players can adjust their own orders on the end screen before accepting the rematch.
 
 ### Solo draws (decided)
 
@@ -410,6 +423,7 @@ The winner of rock, paper, scissors gets the number of crates in the orders that
 
 | Phase | What | Depends on | Size |
 |---|---|---|---|
+| 0 | **Study the references**: open all twelve images in `references/` at full size, zoom into their regions, read each description beside its image, and note anything the descriptions missed; for the current screens, confirm each listed problem still exists in the live build | nothing | Small |
 | 1 | **Rules and server**: orders, per-supply switches, crates split, match clock and turn length, time-up tiebreak, quick match orders and the draw, solo draws (schema and API), the computer respecting orders, engine tests | nothing | Medium |
 | 2 | **Match screen**: the taskbar of 3D icons, windows with minimise and close, the supply windows, the notebook log (with the numbering fix), taunts, the match clock in the HUD, Pause in the top corner and its menu | 1 | Large |
 | 3 | **End of match in the world**: the staged loss and win, the paper report, in-world choices | 2 | Medium |
@@ -419,10 +433,4 @@ The winner of rock, paper, scissors gets the number of crates in the orders that
 
 ## Still open
 
-Everything else is decided. These remain, each with a proposed answer:
-
-1. **"One shot"**: read as the continuous single-take camera (like the film *1917*). Did you mean that, or the video game *OneShot*? *Proposed: the single take.*
-2. **Turn length for 10 and 15 minute matches**: *proposed 45 and 60 seconds* (5-minute matches are decided at 30).
-3. **Friend rooms**: do only the host's orders apply, or does the friend bring orders too, with the draw deciding as in quick match? *Proposed: the host's orders, shown to the friend before joining.*
-4. **Quick match rematch**: *proposed: both players keep their own orders (and can change them on the end screen), and a new draw decides again.*
-5. **The public repository**: the reference screenshots from Zelda, Cereza and Plants vs. Zombies are in the public repo. Keep them, or remove the three images and keep only their written descriptions?
+Nothing. Every question has been answered (see "Decisions so far", rows 1 to 18). The plan is ready to build, phase by phase, starting with phase 0, as soon as the owner says go.

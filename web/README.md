@@ -23,6 +23,10 @@ What carries over from the original: callsigns with optional passwords, create a
 | `src/client/audio.js` | Every sound is synthesised with Web Audio (cannons, whistles, the death knell, bugles, wind), so there are no audio files to download. |
 | `src/client/match.js` | The match screen: plays the server's events as animations in order. The dock under the field switches between the keypad, the supply cards and the log (on desktop the log is a side window), so one thing is on screen at a time; the turn banner fades once read and comes back only if you sit idle. |
 
+## Redesign
+
+A redesign of the match screen, title screen, end screens and match rules is planned in [`design/redesign-requests.md`](design/redesign-requests.md). It has not been built yet. The screenshots behind it are in [`design/references/`](design/references/) and are kept in the repository on purpose so they can be analyzed properly; study every image before building.
+
 ## Run it
 
 ```
