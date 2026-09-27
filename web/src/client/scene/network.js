@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { K, tint, join, box, cyl } from "./kit.js";
-import { sandbagWall, plankWall, ironSheet, duckboard, doorway, lantern, aFrame, seeded, TRENCH_COLOURS as T } from "./trench.js";
+import { sandbagWall, plankWall, ironSheet, duckboard, doorway, lantern, aFrame, seeded, slab, TRENCH_COLOURS as T } from "./trench.js";
 import { fieldPhone } from "./kit.js";
 import { scope, smoke } from "./icons.js";
 import { buildPlane } from "./plane.js";
@@ -144,7 +144,7 @@ export class Network {
     const { x, z } = PLACES.corner;
     this.put(sandbagWall(4.8, 6), x - 0.1, 0, z - 2.25);
     this.put(sandbagWall(4.8, 2), x - 0.1, 1.14, z - 2.35);
-    this.put(tint(box(4.4, 0.08, 0.42, 0.02), T.board), x - 0.1, 0.42, z - 1.8, 0);
+    this.put(tint(slab(4.4, 0.08, 0.42), T.board), x - 0.1, 0.42, z - 1.8, 0);
     for (const dx of [-2, -0.7, 0.6, 1.9]) this.put(box(0.1, 0.42, 0.1, 0.02), x + dx, 0.21, z - 1.7);
     this.put(plankWall(5.2, 1.3), x - 2.45, 0, z + 0.35, PI / 2);
     this.put(sandbagWall(5.2, 2), x - 2.6, 1.3, z + 0.35, PI / 2);
@@ -161,7 +161,7 @@ export class Network {
     // The field manual on a crate, and the field radio on the firestep.
     this.anchors.manual = new THREE.Vector3(x - 1.7, 0.66, z + 1.3);
     this.anchors.sound = new THREE.Vector3(x + 1.2, 0.85, z - 1.8);
-    this.put(tint(box(0.62, 0.55, 0.5, 0.03), 0x7a5431), x - 1.7, 0.28, z + 1.3, 0.2);
+    this.put(tint(slab(0.62, 0.55, 0.5), 0x7a5431), x - 1.7, 0.28, z + 1.3, 0.2);
     this.put(join([[box(0.36, 0.08, 0.26, 0.02), 0x5e3822], [box(0.34, 0.06, 0.24, 0.01).translate(0.005, 0.005, 0), K.paper]]), x - 1.7, 0.6, z + 1.3, 0.5);
     this.put(join([
       [box(0.5, 0.34, 0.28, 0.03), 0x4d5433],
@@ -275,9 +275,9 @@ export class Network {
   // The notice board on the corner's left wall, where the roll of honour is pinned.
   noticeBoard() {
     const { x, z } = PLACES.board;
-    this.put(tint(box(0.08, 1.2, 1.7, 0.02), 0x5a3f27), x, 1.25, z, 0);
-    this.put(tint(box(0.1, 0.1, 1.9, 0.02), 0x4a3320), x + 0.02, 1.9, z);
-    this.put(tint(box(0.1, 0.1, 1.9, 0.02), 0x4a3320), x + 0.02, 0.6, z);
+    this.put(tint(slab(0.08, 1.2, 1.7), 0x5a3f27), x, 1.25, z, 0);
+    this.put(tint(slab(0.1, 0.1, 1.9), 0x4a3320), x + 0.02, 1.9, z);
+    this.put(tint(slab(0.1, 0.1, 1.9), 0x4a3320), x + 0.02, 0.6, z);
     this.boardPaper = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.95), new THREE.MeshLambertMaterial({ color: 0xb9ad90 }));
     this.boardPaper.position.set(x + 0.06, 1.25, z);
     this.boardPaper.rotation.y = PI / 2;
@@ -331,7 +331,7 @@ export class Network {
       if (a > 0.2) wall(a, x + ux * (-len / 2 + a / 2), z + uz * (-len / 2 + a / 2), yaw, false);
       if (b > 0.2) wall(b, x + ux * (len / 2 - b / 2), z + uz * (len / 2 - b / 2), yaw, false);
       this.put(doorway(1.1, 1.8), x + ux * at, 0, z + uz * at, yaw);
-      this.put(tint(box(gap + 0.4, 0.5, 0.35, 0.03), T.post), x + ux * at, h - 0.05, z + uz * at, yaw);
+      this.put(tint(slab(gap + 0.4, 0.5, 0.35), T.post), x + ux * at, h - 0.05, z + uz * at, yaw);
     };
     if (door === "front") withDoor(w, cx, cz - hd, 0, doorAt);
     else wall(w, cx, cz - hd, 0);
@@ -340,7 +340,7 @@ export class Network {
     wall(d, cx - hw, cz, PI / 2);
     if (door === "right") withDoor(d, cx + hw, cz, -PI / 2, doorAt);
     else wall(d, cx + hw, cz, -PI / 2);
-    for (let i = 0; i <= 3; i++) this.put(tint(box(w + 0.5, 0.14, 0.16, 0.03), T.post), cx, h + 0.05, cz - hd + (d * i) / 3);
+    for (let i = 0; i <= 3; i++) this.put(tint(slab(w + 0.5, 0.14, 0.16), T.post), cx, h + 0.05, cz - hd + (d * i) / 3);
     const sheets = Math.ceil(w / 1.6);
     for (let i = 0; i < sheets; i++) {
       const sheet = ironSheet(1.7, d + 0.5, 0.5 + (i % 2) * 0.3);
@@ -393,20 +393,18 @@ export class Network {
     this.group.add(this.mapSheet);
     // The dossier, closed on the table, ready to open.
     const dossier = new THREE.Group();
-    dossier.add(new THREE.Mesh(tint(box(0.5, 0.03, 0.36, 0.01), 0xc9a869), this.mat));
+    dossier.add(new THREE.Mesh(tint(slab(0.5, 0.03, 0.36), 0xc9a869), this.mat));
     dossier.position.set(x + 0.35, 0.91, z + 0.45);
     dossier.rotation.y = -0.2;
     this.group.add(dossier);
     this.touch.dossier = dossier;
     this.anchors.dossier = dossier.position.clone();
     // Five crates stacked by the back wall, one for each crate the orders can give.
-    const crates = new THREE.Group();
+    const stack = [];
     for (let i = 0; i < 5; i++) {
-      const c = new THREE.Mesh(tint(box(0.5, 0.42, 0.42, 0.03), i % 2 ? 0x7a5431 : 0x86613b), this.mat);
-      c.position.set((i % 3) * 0.52, 0.21 + Math.floor(i / 3) * 0.43, 0);
-      c.rotation.y = (i % 2 ? 0.08 : -0.06);
-      crates.add(c);
+      stack.push([box(0.5, 0.42, 0.42, 0.03).rotateY(i % 2 ? 0.08 : -0.06).translate((i % 3) * 0.52, 0.21 + Math.floor(i / 3) * 0.43, 0), i % 2 ? 0x7a5431 : 0x86613b]);
     }
+    const crates = new THREE.Mesh(join(stack), this.mat);
     crates.position.set(x - 1.9, 0, z + 1.9);
     this.group.add(crates);
     this.touch.crates = crates;
@@ -448,8 +446,8 @@ export class Network {
     this.put(duckboard(2.4, 0.7), -15.4, 0, 14.1);
     this.dugout(x, z, 3.6, 4, { door: "right", doorAt: -1.5 });
     // The telephone on a shelf under the chalkboard, both on the back wall facing the door.
-    this.put(tint(box(1.5, 0.07, 0.46, 0.02), T.plankLight), x - 0.1, 0.95, z + 1.6);
-    for (const dx of [-0.65, 0.45]) this.put(tint(box(0.06, 0.95, 0.06, 0.02), T.post), x + dx, 0.47, z + 1.7);
+    this.put(tint(slab(1.5, 0.07, 0.46), T.plankLight), x - 0.1, 0.95, z + 1.6);
+    for (const dx of [-0.65, 0.45]) this.put(tint(slab(0.06, 0.95, 0.06), T.post), x + dx, 0.47, z + 1.7);
     const phone = new THREE.Mesh(fieldPhone(), this.mat);
     phone.scale.setScalar(0.46);
     phone.position.set(x - 0.35, 0.99, z + 1.55);
@@ -461,7 +459,7 @@ export class Network {
     this.chalkboard.position.set(x - 0.1, 1.84, z + 1.72);
     this.chalkboard.rotation.y = PI;
     this.group.add(this.chalkboard);
-    this.put(tint(box(1.3, 0.72, 0.04, 0.02), T.post), x - 0.1, 1.84, z + 1.75);
+    this.put(tint(slab(1.3, 0.72, 0.04), T.post), x - 0.1, 1.84, z + 1.75);
     this.touch.chalkboard = this.chalkboard;
     this.anchors.chalkboard = this.chalkboard.position.clone().add(new THREE.Vector3(0.25, -0.05, 0));
     this.chalk("");
@@ -479,11 +477,11 @@ export class Network {
     this.put(sandbagWall(3.4, 6), x - 1.6, 0, z + 0.2, PI / 2);
     this.put(sandbagWall(3.2, 6), x, 0, z + 1.8);
     this.put(sandbagWall(2.2, 6), x + 1.6, 0, z + 0.6, PI / 2);
-    for (const [dx, dz] of [[-1.3, -1.1], [1.3, -1.1], [-1.3, 1.4], [1.3, 1.4]]) this.put(tint(box(0.12, 2.3, 0.12, 0.02), T.post), x + dx, 1.15, z + dz);
+    for (const [dx, dz] of [[-1.3, -1.1], [1.3, -1.1], [-1.3, 1.4], [1.3, 1.4]]) this.put(tint(slab(0.12, 2.3, 0.12), T.post), x + dx, 1.15, z + dz);
     const roof = ironSheet(3, 2.9, 0.7);
     roof.rotateX(-PI / 2 + 0.08);
     this.put(roof, x, 2.34, z + 0.15);
-    this.put(tint(box(0.8, 0.6, 0.6, 0.03), 0x7a5431), x, 0.3, z + 0.9);
+    this.put(tint(slab(0.8, 0.6, 0.6), 0x7a5431), x, 0.3, z + 0.9);
     const radio = new THREE.Group();
     radio.add(new THREE.Mesh(join([
       [box(0.7, 0.42, 0.34, 0.03), 0x4a3423],
@@ -497,7 +495,7 @@ export class Network {
     this.group.add(radio);
     this.touch.radio = radio;
     this.anchors.radio = radio.position.clone().add(new THREE.Vector3(0, 0.05, 0));
-    this.put(tint(box(0.08, 4.2, 0.08, 0.02), T.post), x + 1.9, 2.1, z + 2.3);
+    this.put(tint(slab(0.08, 4.2, 0.08), T.post), x + 1.9, 2.1, z + 2.3);
     this.put(tint(cyl(0.006, 0.006, 2.4, 4).rotateZ(1.2), K.metal), x + 0.95, 3.1, z + 1.6);
     const clip = new THREE.Group();
     clip.add(new THREE.Mesh(join([[box(0.32, 0.44, 0.02, 0.01), 0x6f4d2f], [box(0.28, 0.36, 0.01, 0.005).translate(0, -0.02, 0.012), K.paper], [box(0.12, 0.04, 0.03, 0.01).translate(0, 0.2, 0.02), K.metal]]), this.mat));
@@ -614,7 +612,7 @@ export class Network {
       s.plank.position.y = s.k * 0.03;
     }
     const b = this.bannerMesh;
-    if (b && this.visible !== false) {
+    if (b && this.live) {
       const p = b.geometry.attributes.position;
       const base = this.bannerBase;
       const t = this.time;

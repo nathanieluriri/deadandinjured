@@ -19,9 +19,8 @@ const shuffle = (a) => {
 const other = (side) => (side === "me" ? "opp" : "me");
 
 const SHOTS = {
-  title: { pos: [0, 2.8, 21], look: [0, 7.2, -16], fov: 44, kp: 1.3 },
   // The places of the trench network behind our left flank, framed where they are.
-  corner: { pos: [-11.0, 2.4, 14.8], look: [-14.8, 1.6, 6.8], fov: 50, kp: 1, narrow: { pos: [-14.6, 3.0, 16.6], look: [-15.6, 1.8, 7.0], fov: 56 } },
+  corner: { pos: [-11.0, 2.4, 14.8], look: [-14.8, 1.6, 6.8], fov: 50, kp: 1, narrow: { pos: [-14.7, 2.4, 16.5], look: [-15.55, 1.75, 7.0], fov: 58 } },
   board: { pos: [-14.95, 1.65, 8.2], look: [-17.05, 1.28, 8.9], fov: 46, kp: 1, narrow: { pos: [-13.4, 1.75, 8.0], look: [-17.05, 1.28, 8.9] } },
   war: { pos: [-13.6, 1.9, 17.2], look: [-13.2, 0.85, 20.3], fov: 58, kp: 1, narrow: { pos: [-13.5, 2.2, 17.25], look: [-13.25, 0.75, 20.0] } },
   signals: { pos: [-17.35, 1.66, 14.35], look: [-18.75, 1.3, 17.4], fov: 58, kp: 1, narrow: { pos: [-17.6, 1.7, 14.1], look: [-18.6, 1.35, 17.4], fov: 60 } },
@@ -54,7 +53,7 @@ export class Director {
     this.fov = 44;
     this.shakeAmt = 0;
     this.time = 0;
-    this.name = "title";
+    this.name = "corner";
     this.handheld = 1;
     this.orbit = 0;
     this.hooks = {};
@@ -89,7 +88,6 @@ export class Director {
     this.titleMat = clay(0xf4efe6, 0.4);
     this.titleMat.emissive.setHex(0x221e1a);
     this.titleMat.envMapIntensity = 1.3;
-    this.buildTitle();
     this.words = {};
     this.rps = this.buildRps();
     this.whiteFlags = { me: new WhiteFlag(stage.scene, "me"), opp: new WhiteFlag(stage.scene, "opp") };
@@ -251,11 +249,10 @@ export class Director {
     const t = this.time;
     if (this.follow) this.look.lerp(this.follow.position, 1 - Math.exp(-dt * 10));
     const h = this.handheld;
-    const orbit = this.name === "title" ? Math.sin(t * 0.08) * 3.2 : 0;
     const sx = (Math.sin(t * 31.1) + Math.sin(t * 17.3)) * 0.5 * this.shakeAmt * 0.35;
     const sy = (Math.sin(t * 27.7) + Math.sin(t * 13.9)) * 0.5 * this.shakeAmt * 0.35;
     this.cam.position.set(
-      this.pos.x + orbit + Math.sin(t * 0.37) * 0.09 * h + sx,
+      this.pos.x + Math.sin(t * 0.37) * 0.09 * h + sx,
       this.pos.y + Math.sin(t * 0.51) * 0.06 * h + sy,
       this.pos.z + Math.cos(t * 0.29) * 0.08 * h,
     );
@@ -265,60 +262,6 @@ export class Director {
       this.cam.fov = this.fov;
       this.cam.updateProjectionMatrix();
     }
-    if (this.titleGroup.visible) this.animateTitle(t);
-  }
-
-  buildTitle() {
-    this.titleGroup = new THREE.Group();
-    this.titleGroup.position.set(0, 10.6, -28);
-    const l1 = word("DEAD &", { size: 3.2, depth: 1.2, material: this.titleMat });
-    const l2 = word("INJURED", { size: 3.2, depth: 1.2, material: this.titleMat });
-    l1.group.position.y = 2.05;
-    l2.group.position.y = -2.05;
-    this.titleGroup.add(l1.group, l2.group);
-    this.titleLetters = [...l1.letters, ...l2.letters];
-    this.titleLetters.forEach((m, i) => {
-      m.userData.phase = i * 0.45;
-      m.userData.drop = 1;
-    });
-    this.stage.scene.add(this.titleGroup);
-  }
-
-  animateTitle(t) {
-    for (const m of this.titleLetters) {
-      const h = m.userData.home;
-      const d = m.userData.drop;
-      m.position.y = h.y + Math.sin(t * 1.1 + m.userData.phase) * 0.12 + d * 16;
-      m.rotation.x = Math.sin(t * 0.8 + m.userData.phase) * 0.05 - d * 1.2;
-      m.rotation.z = d * (m.userData.phase % 1 - 0.5);
-    }
-  }
-
-  // The letters fall out of the sky one by one, each landing with a thud.
-  async titleIn() {
-    this.titleGroup.visible = true;
-    const order = this.titleLetters.map((m, i) => i);
-    for (const [n, i] of order.entries()) {
-      const m = this.titleLetters[i];
-      gsap.to(m.userData, {
-        drop: 0, duration: 0.85, delay: n * 0.085, ease: "bounce.out",
-        onStart: () => gsap.delayedCall(0.36, () => this.sfx.play("title", { pan: (m.position.x / 12), n })),
-      });
-    }
-    await wait(order.length * 0.085 + 0.7);
-    this.shake(0.5);
-    this.fx.explode(V(-14, groundHeight(-14, -40), -40), { size: 1.6, crater: false });
-    this.sfx.play("impact", { far: 1, pan: -0.6 });
-  }
-
-  titleOut() {
-    for (const [n, m] of this.titleLetters.entries()) gsap.to(m.userData, { drop: 1, duration: 0.6, delay: n * 0.03, ease: "power2.in" });
-    return wait(0.9).then(() => (this.titleGroup.visible = false));
-  }
-
-  titleShow(on) {
-    this.titleGroup.visible = on;
-    for (const m of this.titleLetters) m.userData.drop = on ? 0 : 1;
   }
 
   // Ambient war on the horizon while the menu is up.

@@ -625,15 +625,6 @@ export class Sfx {
     this.hiss(t, out, { type: "bandpass", f: 2400, q: 2, peak: 0.2, d: 0.01 });
   }
 
-  s_title(o, t) {
-    const out = this.out(o, t, { verb: 0.3, gain: 0.55 });
-    const p = 1 + ((o.n || 0) % 5) * 0.05;
-    this.thump(t, out, 80 * p, 36, 0.35, 1);
-    this.hiss(t, out, { f: 650, peak: 0.45, d: 0.14, buf: this.brown });
-    const v = this.vca(t, 0.001, 0.18, 0.06, out);
-    this.osc("triangle", 240 * p, t, 0.06, v);
-  }
-
   s_rumble(o, t) {
     const out = this.out(o, t, { verb: 0.4, gain: 0.8 });
     this.hiss(t, out, { f: 300, a: 0.3, peak: 0.9, d: 1.5, buf: this.brown });

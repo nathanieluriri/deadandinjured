@@ -17,7 +17,9 @@ Every match is played under a set of **orders**: which supplies are on, how many
 | `src/worker/lobby.js` | The quick match queue, one Durable Object for everyone. |
 | `src/shared/game.js` | The match engine, pure functions shared by the rooms and by matches against the computer in the browser. A player's code never leaves the server until the match ends. |
 | `schema.sql` | D1 (SQLite): players, sessions, finished matches. |
-| `src/client/scene/` | The three.js field: terrain, sky, the soldiers and the set dressing, effects, the camera director and the 3D title. |
+| `src/client/scene/` | The three.js field: terrain, sky, the soldiers and the set dressing, effects and the camera director. |
+| `src/client/scene/network.js`, `trench.js` | The trench network behind our left flank, where the title lives: the trench corner with the canvas banner and the signpost, the notice board, the war room, the signals dugout and the radio post, built up breastwork style from code-built sandbags, timber, iron, duckboards and lanterns. The ground there is levelled only where no battle shot looks (`palette.js`). |
+| `src/client/title.js`, `title.css` | The title as a place: each choice is an object, with a real button laid over it for keyboards, screen readers and taps, and the camera walks between places in one continuous take (`director.travel`). Play the computer goes through the war room to the enemy commanders on their parapet; a friend's room is opened on the field telephone and its code chalked up; quick match searches from the radio post. The first visit flies in over the field. |
 | `src/client/scene/army.js` | Eight rigged soldiers: skinned meshes driven by an animation mixer (idle, aim, duck, hit, death, wave, taunt, jump), each side in its own uniform. Helmets and rifles are instanced; a hit knocks them off and they tumble to rest on the field. |
 | `src/client/scene/director.js` | The camera and the moments: volleys, the supply draw, and the supplies' own scenes. Recon sends a spotter plane (`plane.js`) over their trench to drop a green or red flare; the sniper looks through a scope at the soldier in the chosen spot, and a soldier who survives the shot taunts you. |
 | `src/client/scene/stage.js` | The renderer. The drawing buffer is only resized right before a render, since a resize clears it and a cleared buffer on screen is a black frame; resolution adapts to the frame rate in quarter steps, and a lost WebGL context is rebuilt. |
@@ -28,7 +30,7 @@ Every match is played under a set of **orders**: which supplies are on, how many
 
 ## Redesign
 
-A redesign of the match screen, title screen, end screens and match rules is planned in [`design/redesign-requests.md`](design/redesign-requests.md). It has not been built yet. The screenshots behind it are in [`design/references/`](design/references/) and are kept in the repository on purpose so they can be analyzed properly; study every image before building.
+The redesign of the match screen, title screen, end screens and match rules is planned in [`design/redesign-requests.md`](design/redesign-requests.md) and built phase by phase; each phase's sketch and review are in [`design/studio-notes.md`](design/studio-notes.md). The screenshots behind it are in [`design/references/`](design/references/) and are kept in the repository on purpose so they can be analyzed properly; study every image before building.
 
 ## Run it
 

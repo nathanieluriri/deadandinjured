@@ -425,7 +425,6 @@ export class MatchView {
     const s = this.s;
     this.app.onPhase(phase);
     if (phase === "lobby") return;
-    this.dir.titleShow(false);
     if (phase === "supply") {
       if (!prev || prev.phase === "lobby") this.sfx.play("found");
       this.dir.resetField();

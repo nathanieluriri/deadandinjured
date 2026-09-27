@@ -103,7 +103,6 @@ class App {
     this.director = new Director({ stage: this.stage, world: this.world, army: this.army, fx: this.fx, sfx: this.sfx });
     this.director.onParadeEnd = () => this.parade(false);
     this.director.applyShot("corner", true);
-    this.director.titleShow(true);
     this.fx.warm();
     this.stage.renderer.compile(this.stage.scene, this.stage.camera);
     for (const l of Object.values(this.hud.logos)) l.root.visible = true;
@@ -111,9 +110,9 @@ class App {
     for (const l of Object.values(this.hud.logos)) l.root.visible = false;
     this.progress(0.85);
     await frame();
-    this.director.titleShow(false);
     this.view = new MatchView(this);
     this.title = new Title(this);
+    this.replayIntro = () => this.title.replayIntro();
     this.bindIcons();
     this.bindUi();
     this.bindPause();
@@ -183,6 +182,7 @@ class App {
     this.screen = name;
     document.body.dataset.screen = name;
     this.icons.on = name === "match";
+    this.network.live = name === "menu";
     this.layout();
     clearInterval(this.warTimer);
     if (name === "menu") this.warTimer = setInterval(() => this.screen === "menu" && !document.hidden && this.director.distant(), 7000 + Math.random() * 6000);
@@ -327,7 +327,8 @@ class App {
     if (note.textContent !== text) note.textContent = text;
     note.hidden = !text;
     for (const [k, on] of [["effects", this.sfx.effects], ["music", this.sfx.music]]) document.querySelector(`[data-p="${k}"]`).setAttribute("aria-pressed", String(on));
-    $("introRow").hidden = !this.replayIntro;
+    // Replaying the intro leaves the field, so it is offered only once a match is over.
+    $("introRow").hidden = !this.replayIntro || this.inMatch();
     document.querySelector('[data-p="quit"]').textContent = this.inMatch() ? "Quit game" : "Back to base";
   }
 
@@ -425,13 +426,13 @@ class App {
     });
     if (fine) {
       document.addEventListener("pointerover", (e) => {
-        const t = e.target.closest?.(".item, .chip, .btn, .tool, .rps button, .link");
+        const t = e.target.closest?.(".hot, .stamp-btn, .link-btn, .back-tag, .btn, .tool, .rps button, .link");
         if (t && t !== this.hovered && !t.disabled) this.sfx.play("hover");
         this.hovered = t;
       });
     }
     document.addEventListener("click", (e) => {
-      if (e.target.closest?.(".chip, .btn, .link:not(#soundBtn), .tool")) this.sfx.play("click");
+      if (e.target.closest?.(".stamp-btn, .link-btn, .back-tag, .btn, .link:not(#soundBtn), .tool")) this.sfx.play("click");
     });
     addEventListener("resize", () => this.layout());
   }
@@ -463,7 +464,6 @@ class App {
     this.director.resetField();
     this.parade(true);
     this.director.rpsShow(false);
-    this.director.titleShow(false);
     let seen = true;
     try {
       seen = localStorage.getItem("di.intro") === "1";

@@ -54,3 +54,20 @@ Shipped as planned: orders, supply switches, the crates split, the match clock a
 - Animation and sound: the stamp lands on a thump, the strips type in with a telegraph sounder, the telephone rings with a bell and a crank; under reduced motion the camera cuts, nothing shakes and nothing types.
 - QA: two reviewers tried to break it and 19 of their 20 findings were confirmed and fixed (the ending leaking into the menu, a reconnect that never showed the end, the stale battle state during the ending, a telephone that rang forever after the room closed, focus marks, tap sizes, widths from 441 to 555 px, phones on their side). Checked at 320, 360, 390, 441, 480, 520, 600 and 1440 wide and 844 by 390; engine and report tests, and a live two-player match with a rematch.
 - Accessibility and performance: the verdict and the report's first line are read out once; the tags and the telegram are text; the telephone and signpost are two merged meshes on the existing icon pass.
+
+## Phase 4: the trench network
+
+### Sketch (environment artist, cinematographer, performance)
+
+- **Where**: a survey of every battle shot, on a desktop and on a phone with the phone's pull-back, found the one region no battle camera ever sees: the left flank behind our line (left of about x -13 at our line, widening further back). The whole network lives there, so no match view changes.
+- **How it is built**: the ground there is levelled (`palette.js networkMask`, fading to nothing exactly at the edge of what battle sees) and the trench is built up, breastwork style, rather than dug, since the terrain's metre-wide cells cannot carve a clean trench. Everything is built in code in the soldiers' clay style (the kit's download host was unavailable, and code props cost nothing): stuffed sandbags laid in bond, timber revetments, corrugated iron, duckboards, A-frames, doorways with gas curtains, lanterns with glowing glass.
+- **The places**: the trench corner with the title painted on a canvas banner (the skull and the bandage from the logo stamped at its ends) and a signpost of four planks; the notice board on the corner's wall; the communication trench back to the war room (map table, dossier, crates, the three supply tokens, a field clock); a branch to the signals dugout (the field telephone under a chalkboard); the radio post under a sheet of iron with its aerial and clipboard; and on the enemy parapet, for the title only, their three commanders dressed by rank (the Recruit's side cap, the Sergeant's chevrons, the General's peaked cap and star) behind stencilled nameplates.
+
+## Phase 5: the title, lived in the trench
+
+### Sketch (UX designer, cinematographer, gameplay programmer)
+
+- **Every choice is an object** in its place, with a real button laid over it each frame (so Tab, screen readers and taps all work); planks carry their own painted words, other objects a paper tag. The web header, the menu cards and the separate wait and search windows are gone.
+- **One take**: the camera walks between places along the trench on smooth curves (`director.travel`), looking a little ahead like a walking operator, with the trench's posts and walls passing the lens; a click during a walk hurries it; reduced motion turns walks into short fades. Leaving for a match climbs out over the top into the battle, and Back to base walks back to the corner.
+- **Paths**: Play the computer is the war room (your standing orders in the dossier), then over the top to the commanders; a friend's room is opened on the telephone (orders in the war room, then the code chalked up) or dialled, and the host's orders arrive as a telegram to accept; quick match searches from the radio post with random orders on the clipboard, changeable while it searches; the roll of honour is pinned to the notice board; the field manual is the book on the crate, sound is the field radio, your callsign and record are on your dog tag.
+- **The first visit** flies in over the field: high over no man's land, low past the commanders, across the wire and over our parapet into the corner. A click or a key skips it; the dog tag replays it.

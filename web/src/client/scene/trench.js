@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { K, tint, join, box, cyl } from "./kit.js";
 
 // The pieces a breastwork trench is built from, in the soldiers' clay style: sandbags, timber
@@ -17,15 +18,18 @@ export function seeded(seed = 1) {
   return () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
 }
 
-// One sandbag: a stuffed pillow, squared at the ends and bulging in the middle.
+// A trench is built from hundreds of these, so they stay plain boxes: a few triangles each.
+export const slab = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+
+// One sandbag: a stuffed pillow, squared at the ends and bulging in the middle, in twenty
+// triangles with its normals shared across the edges so it shades soft.
 const sackGeo = (() => {
-  const g = box(0.56, 0.2, 0.34, 0.08);
+  const g = mergeVertices(new THREE.BoxGeometry(0.56, 0.2, 0.34, 2, 1, 1).deleteAttribute("normal").deleteAttribute("uv"));
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i);
-    const k = 1 - Math.pow(Math.abs(x) / 0.28, 2) * 0.35;
-    p.setY(i, p.getY(i) * (0.8 + 0.35 * k));
-    p.setZ(i, p.getZ(i) * (0.85 + 0.2 * k));
+    if (Math.abs(p.getX(i)) > 0.01) continue;
+    p.setY(i, p.getY(i) * 1.45);
+    p.setZ(i, p.getZ(i) * 1.18);
   }
   g.computeVertexNormals();
   return g;
@@ -58,12 +62,12 @@ export function plankWall(len, h = 1.3) {
   const posts = Math.max(2, Math.round(len) + 1);
   for (let i = 0; i < posts; i++) {
     const x = -len / 2 + (len * i) / (posts - 1);
-    parts.push([box(0.12, h + 0.15, 0.12, 0.02).translate(x, (h + 0.15) / 2, 0.08), T.post]);
+    parts.push([slab(0.12, h + 0.15, 0.12).translate(x, (h + 0.15) / 2, 0.08), T.post]);
   }
   const rows = Math.round(h / 0.22);
   for (let r = 0; r < rows; r++) {
     const c = r % 3 === 1 ? T.plankLight : T.plank;
-    parts.push([box(len, 0.2, 0.05, 0.01).rotateZ((r % 2 ? 1 : -1) * 0.006).translate(0, 0.11 + r * 0.22, 0), c]);
+    parts.push([slab(len, 0.2, 0.05).rotateZ((r % 2 ? 1 : -1) * 0.006).translate(0, 0.11 + r * 0.22, 0), c]);
   }
   return join(parts);
 }
@@ -91,11 +95,11 @@ export function ironSheet(w = 1.8, h = 1.1, rust = 0.5) {
 // A duckboard: two runners and slats across, to keep boots out of the mud.
 export function duckboard(len = 2, w = 0.7) {
   const parts = [];
-  for (const s of [-1, 1]) parts.push([box(len, 0.08, 0.08, 0.015).translate(0, 0.04, s * (w / 2 - 0.08)), T.post]);
+  for (const s of [-1, 1]) parts.push([slab(len, 0.08, 0.08).translate(0, 0.04, s * (w / 2 - 0.08)), T.post]);
   const n = Math.round(len / 0.16);
   for (let i = 0; i < n; i++) {
     const x = -len / 2 + 0.08 + i * (len / n);
-    parts.push([box(0.1, 0.03, w, 0.01).translate(x, 0.095, 0), i % 4 === 2 ? T.plankLight : T.board]);
+    parts.push([slab(0.1, 0.03, w).translate(x, 0.095, 0), i % 4 === 2 ? T.plankLight : T.board]);
   }
   return join(parts);
 }
@@ -104,13 +108,13 @@ export function duckboard(len = 2, w = 0.7) {
 // drawn aside.
 export function doorway(w = 1.1, h = 1.7) {
   const parts = [
-    [box(0.16, h, 0.16, 0.02).translate(-w / 2, h / 2, 0), T.post],
-    [box(0.16, h, 0.16, 0.02).translate(w / 2, h / 2, 0), T.post],
-    [box(w + 0.5, 0.18, 0.2, 0.02).translate(0, h + 0.09, 0), T.post],
+    [slab(0.16, h, 0.16).translate(-w / 2, h / 2, 0), T.post],
+    [slab(0.16, h, 0.16).translate(w / 2, h / 2, 0), T.post],
+    [slab(w + 0.5, 0.18, 0.2).translate(0, h + 0.09, 0), T.post],
   ];
   // The curtain, gathered to one side in folds.
   for (let i = 0; i < 4; i++) {
-    parts.push([box(0.12, h - 0.15, 0.06, 0.02).rotateY(0.3 * (i % 2 ? 1 : -1)).translate(-w / 2 + 0.14 + i * 0.09, (h - 0.15) / 2 + 0.05, 0.05), i % 2 ? T.canvas : T.canvasDark]);
+    parts.push([slab(0.12, h - 0.15, 0.06).rotateY(0.3 * (i % 2 ? 1 : -1)).translate(-w / 2 + 0.14 + i * 0.09, (h - 0.15) / 2 + 0.05, 0.05), i % 2 ? T.canvas : T.canvasDark]);
   }
   parts.push([cyl(0.02, 0.02, w + 0.1, 6).rotateZ(PI / 2).translate(0, h - 0.05, 0.08), K.metal]);
   return join(parts);
@@ -142,9 +146,9 @@ export function brazier() {
 // An A-frame: the timber that holds a trench's walls apart and carries its duckboards.
 export function aFrame(w = 1.4, h = 1.5) {
   return join([
-    [box(0.1, h * 1.05, 0.1, 0.02).rotateZ(0.2).translate(-w / 2 + 0.1, h / 2, 0), T.post],
-    [box(0.1, h * 1.05, 0.1, 0.02).rotateZ(-0.2).translate(w / 2 - 0.1, h / 2, 0), T.post],
-    [box(w, 0.1, 0.1, 0.02).translate(0, h * 0.28, 0), T.post],
+    [slab(0.1, h * 1.05, 0.1).rotateZ(0.2).translate(-w / 2 + 0.1, h / 2, 0), T.post],
+    [slab(0.1, h * 1.05, 0.1).rotateZ(-0.2).translate(w / 2 - 0.1, h / 2, 0), T.post],
+    [slab(w, 0.1, 0.1).translate(0, h * 0.28, 0), T.post],
   ]);
 }
 
