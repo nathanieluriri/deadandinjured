@@ -31,7 +31,7 @@ const js = await build({
   define: { DEV: String(dev), SOLDIER_URL: JSON.stringify(out["soldier.glb"]), PROPS_URL: JSON.stringify(out["props.glb"]) },
 });
 const css = await build({
-  entryPoints: [path.join(root, "src/client/style.css")],
+  entryPoints: [path.join(root, "src/client/app.css")],
   bundle: true, minify: !dev, write: false, external: ["/fonts/*"],
 });
 

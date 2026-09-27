@@ -5,6 +5,8 @@ import { Army, loadSoldier } from "./scene/army.js";
 import { Fx } from "./scene/fx.js";
 import { Director } from "./scene/director.js";
 import { LogoHud } from "./scene/logo.js";
+import { IconDeck } from "./scene/icons.js";
+import { paintTextures, canvases } from "./textures.js";
 import { Sfx } from "./audio.js";
 import { MatchView } from "./match.js";
 import { RemoteMatch, LocalMatch, quickMatch } from "./net.js";
@@ -72,6 +74,7 @@ class App {
     for (const p of [soldier, props]) p.catch(() => {});
     if (/[?&]film\b/.test(location.search)) document.documentElement.classList.add("film");
     grain();
+    const textures = paintTextures().catch(() => {});
     this.progress(0.08);
     await frame();
     const iconMode = location.search.match(/[?&]icon(?:=(\w+))?/);
@@ -87,6 +90,9 @@ class App {
     this.army = new Army(this.stage, await soldier);
     this.fx = new Fx(this.stage, this.world);
     this.sfx = new Sfx();
+    this.icons = new IconDeck(this.stage, { environment: this.world.envRT.texture, props: await props });
+    this.stage.restores.push(() => (this.icons.scene.environment = this.world.envRT.texture));
+    this.gfx(store("di.gfx") || "auto");
     this.progress(0.6);
     await frame();
     this.director = new Director({ stage: this.stage, world: this.world, army: this.army, fx: this.fx, sfx: this.sfx });
@@ -101,7 +107,10 @@ class App {
     await frame();
     this.director.titleShow(false);
     this.view = new MatchView(this);
+    this.bindIcons();
     this.bindUi();
+    this.bindPause();
+    await textures;
     this.layout();
     await Promise.race([document.fonts?.ready, new Promise((r) => setTimeout(r, 1500))]);
     this.me = (await api("/api/me").catch(() => ({ player: null }))).player;
@@ -168,9 +177,173 @@ class App {
   show(name) {
     this.screen = name;
     document.body.dataset.screen = name;
+    this.icons.on = name === "match";
     this.layout();
     clearInterval(this.warTimer);
     if (name === "menu") this.warTimer = setInterval(() => this.screen === "menu" && !document.hidden && this.director.distant(), 7000 + Math.random() * 6000);
+  }
+
+  // Every tool on the bar, the pause stud and the draw's hands get their clay object.
+  bindIcons() {
+    const ic = this.icons;
+    ic.addBoard("plank", $("plank"), canvases.plank);
+    ic.addBoard("hands", $("rps"), canvases.plank);
+    for (const b of document.querySelectorAll("#bar [data-open]")) ic.add(b.dataset.open, b, { size: 0.9 });
+    for (const b of document.querySelectorAll("#rps [data-pick]")) ic.add(b.dataset.pick, b, { size: 0.9 });
+    ic.add("crate", $("tbCrate"), { size: 0.95 });
+    ic.add("pause", $("pauseBtn"), { size: 0.86 });
+    // The whole bar is compiled now, so the first match does not stall on it.
+    ic.on = true;
+    for (const it of ic.items.values()) it.root.visible = true;
+    this.stage.renderer.compile(ic.scene, ic.camera);
+    for (const it of ic.items.values()) it.root.visible = false;
+    ic.on = false;
+  }
+
+  // Auto lets the renderer trade resolution for frame rate; Sharp holds it at the top; Fast caps
+  // it low for slow phones.
+  gfx(mode) {
+    const st = this.stage;
+    const top = st.top ?? st.cap;
+    st.top = top;
+    if (mode === "sharp") {
+      st.cap = top;
+      st.dpr = top;
+      st.adaptive = false;
+    } else if (mode === "fast") {
+      st.cap = Math.min(top, 1);
+      st.dpr = Math.min(st.dpr, st.cap);
+      st.adaptive = !window.__vclock;
+    } else {
+      mode = "auto";
+      st.cap = top;
+      st.adaptive = !window.__vclock && !/[?&]hq\b/.test(location.search);
+    }
+    st.floor = Math.min(st.floor, st.cap);
+    this.gfxMode = mode;
+    store("di.gfx", mode);
+    for (const b of document.querySelectorAll("[data-gfx]")) b.setAttribute("aria-checked", String(b.dataset.gfx === mode));
+  }
+
+  // ---- the pause menu ------------------------------------------------------------------------
+
+  bindPause() {
+    const dlg = $("pauseDlg");
+    $("pauseBtn").addEventListener("click", () => this.pause());
+    dlg.addEventListener("cancel", (e) => {
+      if (!$("quitConfirm").hidden) {
+        e.preventDefault();
+        this.quitAsk(false);
+      }
+    });
+    dlg.addEventListener("close", () => this.unpause());
+    dlg.addEventListener("click", (e) => {
+      if (e.target === dlg) return dlg.close();
+      const b = e.target.closest("[data-p], [data-gfx]");
+      if (!b) return;
+      this.sfx.play("paper");
+      if (b.dataset.gfx) return this.gfx(b.dataset.gfx);
+      const p = b.dataset.p;
+      if (p === "resume") dlg.close();
+      else if (p === "manual") $("manualDlg").showModal();
+      else if (p === "effects") this.sfx.setEffects(!this.sfx.effects);
+      else if (p === "music") this.sfx.setMusic(!this.sfx.music);
+      else if (p === "quit") this.quitAsk(true);
+      else if (p === "stay") this.quitAsk(false);
+      else if (p === "leave") this.quit();
+      else if (p === "intro") {
+        dlg.close();
+        this.replayIntro?.();
+      }
+      this.pauseState();
+    });
+    this.pauseTicker = setInterval(() => dlg.open && this.pauseState(), 250);
+  }
+
+  inMatch() {
+    const s = this.view.s;
+    return this.screen === "match" && s && !["over", "lobby"].includes(s.phase);
+  }
+
+  pause() {
+    const dlg = $("pauseDlg");
+    if (dlg.open || this.screen !== "match") return;
+    this.quitAsk(false);
+    const solo = this.view.solo && this.inMatch();
+    if (solo) this.freeze(true);
+    $("pauseTag").textContent = solo ? "Halted" : this.inMatch() ? "The war goes on" : "At ease";
+    this.pauseState();
+    this.sfx.play("paper");
+    dlg.showModal();
+    dlg.querySelector('[data-p="resume"]').focus({ preventScroll: true });
+  }
+
+  unpause() {
+    this.freeze(false);
+  }
+
+  // Against the computer, pause stops the world: every animation, the clock and its thinking.
+  freeze(on) {
+    const conn = this.view.conn;
+    if (on === !!this.frozen) return;
+    this.frozen = on;
+    if (on) {
+      conn?.pause?.();
+      gsap.globalTimeline.pause();
+      this.savedScale = this.stage.timeScale;
+      this.stage.timeScale = 0;
+      this.sfx.freeze(true);
+    } else {
+      this.stage.timeScale = this.savedScale ?? 1;
+      gsap.globalTimeline.resume();
+      conn?.resume?.();
+      this.sfx.freeze(false);
+    }
+  }
+
+  pauseState() {
+    const s = this.view.s;
+    const note = $("pauseNote");
+    const live = this.inMatch() && !this.view.solo;
+    let text = "";
+    if (live) {
+      const now = Date.now() + (this.view.offset || 0);
+      const turn = s.deadline ? Math.max(0, Math.ceil((s.deadline - now) / 1000)) : null;
+      const clock = s.clock ? Math.max(0, Math.ceil((s.clock - now) / 1000)) : null;
+      const who = s.turn === "me" ? "Your turn is running" : `${s.opp?.name || "The enemy"}'s turn is running`;
+      const parts = [];
+      if (s.phase === "battle" && turn != null) parts.push(`${who}: ${turn}s left.`);
+      if (clock != null) parts.push(`Match clock ${Math.floor(clock / 60)}:${String(clock % 60).padStart(2, "0")}.`);
+      text = `A live match cannot stop. ${parts.join(" ")}`;
+    } else if (this.inMatch()) text = "The field is frozen until you return.";
+    if (note.textContent !== text) note.textContent = text;
+    note.hidden = !text;
+    for (const [k, on] of [["effects", this.sfx.effects], ["music", this.sfx.music]]) document.querySelector(`[data-p="${k}"]`).setAttribute("aria-pressed", String(on));
+    $("introRow").hidden = !this.replayIntro;
+    document.querySelector('[data-p="quit"]').textContent = this.inMatch() ? "Quit game" : "Back to base";
+  }
+
+  quitAsk(on) {
+    const ask = on && this.inMatch();
+    if (on && !ask) return this.quit();
+    $("quitConfirm").hidden = !ask;
+    $("pauseList").hidden = ask;
+    if (ask) {
+      $("leaveText").textContent = this.view.solo ? `The computer keeps the field: this counts as a loss.` : `Leaving now hands the win to ${this.view.s?.opp?.name || "your opponent"}.`;
+      document.querySelector('[data-p="stay"]').focus({ preventScroll: true });
+    } else if (on === false && !$("pauseDlg").hidden) document.querySelector('[data-p="resume"]')?.focus({ preventScroll: true });
+  }
+
+  quit() {
+    const dlg = $("pauseDlg");
+    const leaving = this.inMatch();
+    if (leaving) {
+      this.view.conn?.send({ t: "leave" });
+      if (this.view.solo) this.recordSolo("loss");
+    }
+    this.quitAsk(false);
+    dlg.close();
+    this.home();
   }
 
   // The 3D view centres itself in whatever the panels leave open.
@@ -183,9 +356,10 @@ class App {
       // A cinematic frames the whole screen and restores the layout when it ends.
       if (b.classList.contains("cine")) return;
       if (this.screen === "match") {
-        // Measured to the top of the aim pane whichever pane is open, so switching tabs never moves the camera.
-        if (b.classList.contains("phase-deploy") || b.classList.contains("phase-battle")) bottom = ($("dock").getBoundingClientRect().bottom - $("paneAim").getBoundingClientRect().top + 14) * (innerWidth < 900 ? 0.9 : 0.55);
-        else if (b.classList.contains("phase-supply")) bottom = $("rps").getBoundingClientRect().height + 20;
+        // Set by the bar and the keypad's height, open or not, so opening windows never moves the camera.
+        const bar = $("bar").getBoundingClientRect().height || 72;
+        if (b.classList.contains("phase-deploy") || b.classList.contains("phase-battle")) bottom = innerWidth < 900 ? (bar + 300) * 0.9 : innerWidth < 1180 ? (bar + 330) * 0.62 : (bar + 184) * 0.6;
+        else if (b.classList.contains("phase-supply")) bottom = bar + 20;
         else if (b.classList.contains("phase-over")) bottom = innerWidth < 900 ? 220 : 0;
         top = innerWidth < 900 ? 100 : 50;
       } else if (this.screen === "menu") {
@@ -206,7 +380,7 @@ class App {
   bindUi() {
     $("enterBtn").addEventListener("click", () => this.enter());
     $("brand").addEventListener("click", () => {
-      if (this.screen === "match" && this.view.s && !["over", "lobby"].includes(this.view.s.phase)) return $("leaveBtn").click();
+      if (this.screen === "match") return this.pause();
       if (this.screen !== "menu" && this.screen !== "pre") this.home();
     });
     const sound = $("soundBtn");
@@ -222,12 +396,12 @@ class App {
       $("manualDlg").showModal();
     });
     for (const b of document.querySelectorAll("[data-close]")) b.addEventListener("click", () => b.closest("dialog").close("cancel"));
-    for (const item of document.querySelectorAll("[data-open]")) {
+    for (const item of document.querySelectorAll("#menu [data-open]")) {
       item.addEventListener("click", () => {
         const sub = $(item.dataset.open);
         const open = sub.hidden;
         for (const s of document.querySelectorAll(".sub")) s.hidden = true;
-        for (const i of document.querySelectorAll("[data-open]")) i.setAttribute("aria-expanded", "false");
+        for (const i of document.querySelectorAll("#menu [data-open]")) i.setAttribute("aria-expanded", "false");
         sub.hidden = !open;
         item.setAttribute("aria-expanded", String(open));
         this.sfx.play("click");
@@ -296,11 +470,13 @@ class App {
     if (first || !this.director.titleGroup.visible) this.director.titleIn();
     this.sfx.mood("menu");
     for (const s of document.querySelectorAll(".sub")) s.hidden = true;
-    for (const i of document.querySelectorAll("[data-open]")) i.setAttribute("aria-expanded", "false");
+    for (const i of document.querySelectorAll("#menu [data-open]")) i.setAttribute("aria-expanded", "false");
     if (location.pathname !== "/") history.replaceState(null, "", "/");
   }
 
   home() {
+    this.freeze(false);
+    if ($("pauseDlg").open) $("pauseDlg").close();
     this.hud.hide();
     this.lobby?.cancel();
     this.lobby = null;

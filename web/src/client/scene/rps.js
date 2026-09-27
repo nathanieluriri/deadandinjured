@@ -22,7 +22,7 @@ function tint(geo, hex) {
 const join = (parts) => mergeGeometries(parts.map(([g, hex]) => tint(g, hex)));
 
 // A fist seen from the thumb side, forearm running off to -x, knuckles toward +x.
-function fist(sleeve) {
+export function fist(sleeve) {
   const parts = [
     [new RoundedBoxGeometry(0.62, 0.56, 0.52, 3, 0.17), SKIN],
     [new THREE.CylinderGeometry(0.25, 0.28, 0.5, 16).rotateZ(Math.PI / 2).translate(-0.5, -0.02, 0), SKIN],
@@ -38,7 +38,7 @@ function fist(sleeve) {
   return join(parts);
 }
 
-function rock(color) {
+export function rock(color) {
   const g = new THREE.IcosahedronGeometry(0.72, 2);
   const p = g.attributes.position;
   const v = new THREE.Vector3();
@@ -64,7 +64,7 @@ function rock(color) {
 }
 
 // A sheet of orders: ruled lines, a band in the side's colour, a corner folded over.
-function paper(color) {
+export function paper(color) {
   const w = 1.1;
   const h = 1.44;
   const shape = new THREE.Shape();
@@ -88,7 +88,7 @@ function paper(color) {
 }
 
 // One half of the scissors: a tapering steel blade and a ring handle in the side's colour.
-function blade(color) {
+export function blade(color) {
   const s = new THREE.Shape();
   s.moveTo(-0.07, 0);
   s.lineTo(0.08, 0);

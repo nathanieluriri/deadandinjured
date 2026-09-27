@@ -4,6 +4,7 @@ import { SIDES, groundHeight } from "./palette.js";
 import { glyph, word, clay, CodeBlocks } from "./type3d.js";
 import { buildRps } from "./rps.js";
 import { buildPlane } from "./plane.js";
+import { WhiteFlag } from "./whiteflag.js";
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const wait = (s) => new Promise((r) => gsap.delayedCall(s, r));
@@ -29,6 +30,12 @@ const SHOTS = {
   reveal: { pos: [0, 3.2, -9.5], look: [0, 2.2, -21.5], fov: 40 },
   mine: { pos: [0, 3.3, 16.2], look: [0, 1.5, 9], fov: 40 },
   far: { pos: [0, 6.5, 26], look: [0, 3.5, -12], fov: 42 },
+  // The endings, held on our own trench.
+  surrender: { pos: [3.4, 1.8, 12.4], look: [-0.9, 2.1, -7], fov: 36, kp: 1.5 },
+  surrenderHigh: { pos: [3, 3.3, 14.4], look: [-0.6, 2.4, -9], fov: 34, kp: 1.5 },
+  victory: { pos: [2.8, 3, 13.5], look: [0.4, 0.9, -17], fov: 31, kp: 1.4 },
+  victoryHigh: { pos: [2.4, 3.9, 15.2], look: [0.4, 1.1, -17], fov: 30, kp: 1.4 },
+  stalemate: { pos: [-1.5, 3.8, 15.5], look: [0, 1.6, -8], fov: 40, kp: 1.45 },
 };
 
 export class Director {
@@ -78,6 +85,10 @@ export class Director {
     this.buildTitle();
     this.words = {};
     this.rps = this.buildRps();
+    this.whiteFlags = { me: new WhiteFlag(stage.scene, "me"), opp: new WhiteFlag(stage.scene, "opp") };
+    stage.hooks.push((dt) => {
+      for (const f of Object.values(this.whiteFlags)) f.update(dt);
+    });
 
     stage.hooks.push((dt) => this.update(dt));
     stage.onResize = () => this.applyShot(this.name, true);
@@ -564,12 +575,14 @@ export class Director {
     for (const w of Object.values(this.words)) w.group.visible = false;
   }
 
+  // The end of a match, played out on the field: the side that lost puts its hands up and a
+  // white flag goes over its sandbags, the other side cheers, and the camera settles on our
+  // trench. The verdict itself is stamped by the page when the "verdict" beat fires.
   async ending({ winner, reason, codes }) {
     const text = winner === "draw" ? "STALEMATE" : reason === "time" && winner !== "none" ? "TIME" : winner === "me" ? (reason === "cracked" ? "CRACKED" : "VICTORY") : winner === "opp" ? (reason === "cracked" ? "OVERRUN" : "FORFEIT") : null;
-    if (winner === "me" || winner === "draw") gsap.to(this.world.flags.opp, { lower: winner === "draw" ? 0.5 : 1, duration: 2.2, ease: "power2.inOut" });
-    if (winner === "opp" || winner === "draw") gsap.to(this.world.flags.me, { lower: winner === "draw" ? 0.5 : 1, duration: 2.2, ease: "power2.inOut" });
-    if (winner === "me") for (const s of this.army.squad("me")) wait(rnd(0, 0.4)).then(() => s.cheer());
-    if (winner === "opp") for (const s of this.army.squad("opp")) wait(rnd(0, 0.4)).then(() => s.cheer());
+    const loser = winner === "me" ? "opp" : winner === "opp" ? "me" : null;
+    if (loser) gsap.to(this.world.flags[loser], { lower: 0.5, duration: 2.2, ease: "power2.inOut" });
+    if (winner === "draw") for (const f of Object.values(this.world.flags)) gsap.to(f, { lower: 0.5, duration: 2.2, ease: "power2.inOut" });
 
     if (codes?.opp) {
       const cb = this.codes.opp;
@@ -582,21 +595,54 @@ export class Director {
       this.fx.dust(V(0, 0.2, cb.group.position.z), 10, 1.4);
       await wait(1.3);
     }
-    if (text) {
-      const w = this.wordFor(text);
-      w.group.visible = true;
-      for (const [i, m] of w.letters.entries()) {
-        m.position.y = m.userData.home.y + 14;
-        m.rotation.x = -1.2;
-        gsap.to(m.position, { y: m.userData.home.y, duration: 0.8, delay: i * 0.06, ease: "bounce.out" });
-        gsap.to(m.rotation, { x: 0, duration: 0.8, delay: i * 0.06, ease: "power2.out" });
-      }
+
+    if (loser) {
+      const victor = other(loser);
+      const home = loser === "me" ? "surrender" : "victory";
+      this.shot(home, 1.9, "power2.inOut");
+      await wait(0.9);
+      for (const s of this.army.squad(loser)) s.surrender(rnd(0, 0.7));
+      for (const s of this.army.squad(victor)) wait(rnd(0.2, 0.7)).then(() => s.cheer(40));
+      const flag = this.whiteFlags[loser];
+      flag.rise = 0;
+      flag.group.visible = true;
+      gsap.to(flag, { rise: 1, duration: 2.2, delay: 0.5, ease: "power2.out" });
+      this.sfx.play(loser === "me" ? "rumble" : "radio", { far: 0.6 });
+      await wait(1.1);
+      // A slow crane as the flag goes up, so the last frame holds the whole scene.
+      this.shot(`${home}High`, 4.5, "sine.inOut");
+      await wait(1.4);
+    } else if (winner === "draw") {
+      this.shot("stalemate", 2.2);
+      for (const side of ["me", "opp"]) this.fx.screen(V(0, 0, SIDES[side].z), true);
+      await wait(1.6);
+    } else {
+      await this.shot("far", 2.2);
     }
-    await this.shot("far", 2.2);
+    if (text) {
+      if (this.hooks.verdict) this.emit("verdict", { text, winner, reason });
+      else this.dropWord(text);
+    }
+    await wait(0.6);
+  }
+
+  dropWord(text) {
+    const w = this.wordFor(text);
+    w.group.visible = true;
+    for (const [i, m] of w.letters.entries()) {
+      m.position.y = m.userData.home.y + 14;
+      m.rotation.x = -1.2;
+      gsap.to(m.position, { y: m.userData.home.y, duration: 0.8, delay: i * 0.06, ease: "bounce.out" });
+      gsap.to(m.rotation, { x: 0, duration: 0.8, delay: i * 0.06, ease: "power2.out" });
+    }
   }
 
   resetField() {
     this.hideWords();
+    for (const f of Object.values(this.whiteFlags)) {
+      gsap.killTweensOf(f);
+      f.reset();
+    }
     this.world.flags.me.lower = 0;
     this.world.flags.opp.lower = 0;
     this.codes.opp.group.visible = false;

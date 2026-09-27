@@ -116,7 +116,7 @@ export class LogoHud {
     this.time = 0;
     this.resize();
     addEventListener("resize", () => this.resize());
-    stage.overlay = this;
+    stage.overlays.push(this);
     stage.hooks.push((dt, t, real) => this.update(real));
   }
 

@@ -1,6 +1,7 @@
 import { gsap } from "gsap/gsap-core";
-import { isCode, randomCode, anySupply, STANDARD_ORDERS } from "../shared/rules.js";
+import { isCode, randomCode, anySupply, STANDARD_ORDERS, POWERS } from "../shared/rules.js";
 import { TIMES } from "../shared/game.js";
+import { Desk } from "./desk.js";
 
 export const TAUNTS = ["Salute", "Fire in the hole!", "Ha ha ha", "Good game", "Come on then", "Boom"];
 const PHASE_MS = { supply: TIMES.supply, deploy: TIMES.deploy };
@@ -22,6 +23,7 @@ const store = (k, v) => {
   return null;
 };
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+const KEYS = { a: "aim", r: "recon", s: "sniper", m: "smoke", l: "log", t: "chat" };
 // One-shot effects run through the Web Animations API and cancel the previous run, so a
 // replay never stacks on a finished one.
 function play(el, frames, opts) {
@@ -35,32 +37,37 @@ export class MatchView {
     this.app = app;
     this.el = {};
     for (const id of ["note", "turn", "turnLabel", "timer", "meName", "oppName", "meCrates", "oppCrates", "oppDot", "slots", "pad", "fireBtn", "delBtn",
-      "mineLog", "theirLog", "logCount", "logs", "logSeg", "overTitle", "overText", "overCodes", "overTag", "rematchBtn", "homeBtn", "leaveBtn",
-      "rps", "stamp", "myCode", "taunts", "tauntBtn", "markBtn", "randomBtn", "panes", "switch", "recent", "deck", "deckNote", "deckDots",
-      "crateBadge", "scope", "scopeTag", "say", "reticle", "reticleTag", "leaveDlg", "leaveText", "live", "clock"]) this.el[id] = $(id);
+      "mineLog", "theirLog", "logCount", "logs", "logSeg", "overTitle", "overText", "overCodes", "overTag", "rematchBtn", "homeBtn",
+      "rps", "stamp", "myCode", "taunts", "markBtn", "randomBtn", "recent", "bar", "tbSupplies", "tbCrates", "crateCount", "unread",
+      "scope", "scopeTag", "say", "reticle", "reticleTag", "live", "clock"]) this.el[id] = $(id);
+    this.windows = Object.fromEntries(["recon", "sniper", "smoke"].map((k) => [k, $(`w-${k}`)]));
     this.slotEls = [...this.el.slots.children];
     this.keys = new Map([...this.el.pad.querySelectorAll("[data-d]")].map((b) => [b.dataset.d, b]));
     this.active = false;
     this.marks = new Map();
     this.sel = { recon: {}, sniper: {} };
-    this.paneName = "aim";
+    this.unreadN = 0;
+    this.seenVolleys = 0;
     this.idleAt = 0;
     this.v3 = this.app.stage.camera.position.clone();
     const extra = this.el.say.cloneNode();
     extra.removeAttribute("id");
     document.body.append(extra);
     this.bubbles = [this.el.say, extra].map((el) => ({ el, soldier: null, off: 0 }));
+    this.desk = new Desk({
+      onOpen: (name) => this.opened(name),
+      onClose: (name) => this.closed(name),
+      onChange: () => {
+        this.updateReticle();
+        this.refreshBar();
+      },
+      sound: (how) => this.sfx.play(how === "open" ? "paper" : how === "min" ? "paperOff" : "knock"),
+    });
     this.bind();
     this.logView(store("di.log") || "mine");
     this.dir.on("scope", (o) => this.scope(o));
     this.dir.on("say", ({ soldier, text, ms }) => this.say(soldier, text, ms, "opp"));
     this.app.stage.hooks.push(() => this.pin());
-    const fit = new ResizeObserver(() => {
-      this.fitPanes();
-      this.thumb();
-    });
-    for (const el of [...this.el.panes.children, ...this.el.switch.querySelectorAll("[data-pane]")]) fit.observe(el);
-    addEventListener("resize", () => this.pane(this.paneName));
     gsap.ticker.add(() => this.clock());
   }
 
@@ -120,20 +127,13 @@ export class MatchView {
       this.dir.setCode(this.input);
       this.refresh();
     });
-    e.tauntBtn.addEventListener("click", () => this.taunts(e.taunts.hidden));
     e.taunts.innerHTML = TAUNTS.map((t, i) => `<button type="button" data-taunt="${i}">${t}</button>`).join("");
     for (const b of e.taunts.querySelectorAll("[data-taunt]")) {
       b.addEventListener("click", () => {
         const id = Number(b.dataset.taunt);
         this.conn?.send({ t: "taunt", id });
         this.showTaunt(id, "mine");
-        this.taunts(false);
-      });
-    }
-    for (const b of e.switch.querySelectorAll("[data-pane]")) {
-      b.addEventListener("click", () => {
-        this.pane(b.dataset.pane);
-        this.sfx.play("click");
+        this.desk.minimise("chat");
       });
     }
     for (const b of e.logSeg.querySelectorAll("[data-log]")) {
@@ -142,11 +142,16 @@ export class MatchView {
         this.sfx.play("click");
       });
     }
-    e.recent.addEventListener("click", () => this.pane("log"));
+    e.recent.addEventListener("click", () => this.desk.open("log", { byUser: true }));
     for (const host of document.querySelectorAll(".pick.digits")) this.picker(host, [..."1234567890"], "digit", (v) => v);
-    for (const host of document.querySelectorAll(".pick.spots")) this.picker(host, [0, 1, 2, 3], "pos", (v) => `${SOLDIER}${v + 1}`);
+    for (const host of document.querySelectorAll(".pick.spots")) this.picker(host, [0, 1, 2, 3], "pos", (v) => `${SOLDIER}<span>${v + 1}</span>`, (v) => `Soldier in spot ${v + 1}`);
     for (const b of document.querySelectorAll("[data-go]")) b.addEventListener("click", () => this.usePower(b.dataset.go));
-    e.deck.addEventListener("scroll", () => this.deckDots(), { passive: true });
+    for (const w of Object.values(this.windows)) {
+      const brief = w.querySelector("[data-brief]");
+      brief.textContent = brief.dataset.brief;
+    }
+    this.fieldAim();
+    this.tips();
     e.rematchBtn.addEventListener("click", () => {
       if (this.solo) return this.app.solo(this.level);
       this.conn?.send({ t: "rematch" });
@@ -154,24 +159,92 @@ export class MatchView {
       e.rematchBtn.textContent = `Waiting for ${this.s?.opp?.name || "them"}`;
     });
     e.homeBtn.addEventListener("click", () => this.app.home());
-    e.leaveBtn.addEventListener("click", () => {
-      if (!this.s || this.s.phase === "over" || this.s.phase === "lobby") return this.app.home();
-      e.leaveText.textContent = this.solo ? "The computer keeps the field." : `Leaving now hands the win to ${this.s.opp?.name || "your opponent"}.`;
-      e.leaveDlg.showModal();
-    });
-    e.leaveDlg.addEventListener("close", () => {
-      if (e.leaveDlg.returnValue !== "go") return;
-      this.conn?.send({ t: "leave" });
-      this.app.home();
-    });
     addEventListener("keydown", (ev) => {
       if (!this.active || document.querySelector("dialog[open]") || ev.metaKey || ev.ctrlKey || ev.altKey) return;
-      if (/^[0-9]$/.test(ev.key)) this.press(ev.key);
-      else if (ev.key === "Backspace") this.back();
-      else if (ev.key === "Enter") this.fire();
-      else if (this.s?.phase === "supply" && "rps".includes(ev.key.toLowerCase())) this.pick({ r: "rock", p: "paper", s: "scissors" }[ev.key.toLowerCase()]);
-      else return;
+      const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
+      const phase = this.s?.phase;
+      const onBar = phase === "deploy" || phase === "battle";
+      if (k === "Escape") {
+        if (!onBar || !this.desk.escape()) this.app.pause();
+      } else if (phase === "supply" && "rps".includes(k) && k.length === 1) this.pick({ r: "rock", p: "paper", s: "scissors" }[k]);
+      else if (k === "p") this.app.pause();
+      else if (!onBar) return;
+      else if (/^[0-9]$/.test(k)) {
+        if (!this.desk.isOpen("aim")) this.desk.open("aim");
+        this.press(k);
+      } else if (k === "Backspace") this.back();
+      else if (k === "Enter" && (ev.target === document.body || ev.target.closest?.("#w-aim"))) this.fire();
+      else if (KEYS[k]) {
+        const b = document.querySelector(`#bar [data-open="${KEYS[k]}"]`);
+        if (!b || b.disabled || b.offsetParent === null) return;
+        this.desk.toggle(KEYS[k], true);
+      } else return;
       ev.preventDefault();
+    });
+  }
+
+  // Labels for the icons: a paper tag on hover, or on a long press on a phone.
+  tips() {
+    for (const b of document.querySelectorAll("#bar .tb")) {
+      const tip = document.createElement("span");
+      tip.className = "tip";
+      tip.setAttribute("aria-hidden", "true");
+      tip.innerHTML = `${b.getAttribute("aria-label")}${b.dataset.key && !b.classList.contains("hand") ? ` <kbd>${b.dataset.key}</kbd>` : ""}`;
+      b.append(tip);
+      let t = null;
+      b.addEventListener("pointerdown", (ev) => {
+        if (ev.pointerType !== "touch") return;
+        clearTimeout(t);
+        t = setTimeout(() => {
+          b.classList.add("tipped");
+          b.dataset.held = "1";
+          navigator.vibrate?.(10);
+          setTimeout(() => b.classList.remove("tipped"), 1400);
+        }, 450);
+      });
+      for (const ev of ["pointerup", "pointerleave", "pointercancel"]) b.addEventListener(ev, () => clearTimeout(t));
+      b.addEventListener("click", (ev) => {
+        if (b.dataset.held) {
+          delete b.dataset.held;
+          ev.stopImmediatePropagation();
+          ev.preventDefault();
+        }
+      }, true);
+      b.addEventListener("contextmenu", (ev) => ev.preventDefault());
+    }
+  }
+
+  // The sniper's soldier can be picked on the field itself: tap one of theirs while the Sniper
+  // window is open.
+  fieldAim() {
+    const canvas = this.app.stage.renderer.domElement;
+    const near = (x, y) => {
+      if (!this.desk.isOpen("sniper") || !this.canPower("sniper")) return null;
+      const cam = this.app.stage.camera;
+      let best = null;
+      let bestD = Math.max(48, innerWidth * 0.05);
+      this.app.army.squad("opp").forEach((sd, i) => {
+        sd.above(this.v3, -0.35).project(cam);
+        const px = (this.v3.x * 0.5 + 0.5) * innerWidth;
+        const py = (-this.v3.y * 0.5 + 0.5) * innerHeight;
+        const d = Math.hypot(px - x, py - y);
+        if (d < bestD) {
+          bestD = d;
+          best = i;
+        }
+      });
+      return best;
+    };
+    canvas.addEventListener("pointermove", (ev) => {
+      if (ev.pointerType !== "mouse") return;
+      canvas.style.cursor = near(ev.clientX, ev.clientY) != null ? "crosshair" : "";
+    });
+    canvas.addEventListener("click", (ev) => {
+      const i = near(ev.clientX, ev.clientY);
+      if (i == null) return;
+      const host = this.windows.sniper.querySelector(".pick.spots");
+      const b = host.querySelector(`[data-v="${i}"]`);
+      if (b.getAttribute("aria-pressed") !== "true") b.click();
     });
   }
 
@@ -194,14 +267,15 @@ export class MatchView {
     this.oppOnline = true;
     this.oppSeen = false;
     this.lastTick = -1;
-    this.taunts(false);
     this.clearPicks();
     this.el.mineLog.innerHTML = "";
     this.el.theirLog.innerHTML = "";
     this.el.recent.hidden = true;
+    this.unreadN = 0;
+    this.seenVolleys = 0;
     this.setPhaseClass(null);
     this.renderSlots();
-    this.pane("aim");
+    this.desk.reset({ restore: false });
   }
 
   stop() {
@@ -237,7 +311,7 @@ export class MatchView {
       case "restart": this.enqueue(() => this.restart()); break;
       case "assigned": this.enqueue(() => this.app.toast(`Out of time: HQ assigned your code, ${m.code}`)); break;
       case "picked": this.sfx.play("click"); this.note(`<b>${this.oppName}</b> has picked`); break;
-      case "joined": this.app.toast(`${m.name} joined the room`); break;
+      case "joined": if (!this.solo) this.app.toast(`${m.name} joined the room`); break;
       case "ready": this.sfx.play("lock", { far: 0.8 }); this.app.toast(`${this.oppName} has deployed their code`); break;
       case "rematch": this.app.toast(`${this.oppName} wants a rematch`); this.sfx.play("radio"); break;
       case "taunt": this.showTaunt(m.id, "opp"); break;
@@ -340,7 +414,8 @@ export class MatchView {
       this.renderSlots();
       this.dir.setCode(this.input, { sound: false });
       this.dir.crate(true);
-      this.pane("aim");
+      this.desk.reset({ restore: false });
+      this.desk.open("aim");
       await this.dir.shot("deploy", prev ? 1.3 : 0.01);
       this.banner("Deploy");
       this.note(`<b>Hide your code:</b> four different digits. ${this.oppName} never sees it.`);
@@ -350,7 +425,8 @@ export class MatchView {
       this.input = "";
       this.renderSlots();
       this.dir.crate(false);
-      this.pane("aim");
+      this.desk.reset();
+      if (s.turn === "me" && !this.desk.isOpen("aim")) this.desk.open("aim");
       await this.dir.shot("home", prev ? 1.3 : 0.01);
       if (prev) {
         this.stamp("Battle", "stations", true);
@@ -360,7 +436,7 @@ export class MatchView {
       this.banner(s.turn === "me" ? "Your shot" : "Their shot", 3200);
       this.note(s.turn === "me" ? "<b>You fire first.</b> Four digits on the keypad, then Fire." : `<b>${this.oppName} fires first.</b> Line up your reply.`);
     } else if (phase === "over") {
-      this.pane("aim");
+      this.desk.reset({ restore: false });
       this.banner("Ceasefire", 4000);
     }
     if (phase === "over" && !prev) {
@@ -686,17 +762,8 @@ export class MatchView {
 
   cine(on) {
     document.body.classList.toggle("cine", on);
-    if (on) this.taunts(false);
-    else this.app.layout();
+    if (!on) this.app.layout();
     this.updateReticle();
-  }
-
-  taunts(open) {
-    const e = this.el;
-    e.taunts.hidden = !open;
-    e.tauntBtn.setAttribute("aria-expanded", String(!!open));
-    if (open) this.sfx.play("click");
-    this.app.layout?.();
   }
 
   oppAim(n) {
@@ -802,39 +869,32 @@ export class MatchView {
     this.refresh();
   }
 
-  // ---- the dock ---------------------------------------------------------------------------
+  // ---- the desk ---------------------------------------------------------------------------
 
-  desk() {
-    return innerWidth >= 900;
+  opened(name) {
+    if (name === "log") this.markRead();
+    if (POWERS.includes(name)) this.app.icons?.preview(name, this.windows[name].querySelector(".photo"));
+    this.refresh();
   }
 
-  pane(name) {
-    const e = this.el;
-    const order = ["aim", "supplies", "log"];
-    if (!order.includes(name) || (name === "log" && this.desk()) || (this.s?.phase === "deploy" && name !== "aim")) name = "aim";
-    this.paneName = name;
-    const i = order.indexOf(name);
-    e.panes.style.setProperty("--p", i);
-    for (const b of e.switch.querySelectorAll("[data-pane]")) b.setAttribute("aria-selected", String(b.dataset.pane === name));
-    for (const p of e.panes.children) p.inert = p.dataset.pane !== name && !(p.dataset.pane === "log" && this.desk());
-    this.idleAt = performance.now();
-    this.fitPanes();
-    this.thumb();
-    this.updateReticle();
-    this.app.layout?.();
+  // Closing a window clears it; minimising keeps it as it was.
+  closed(name) {
+    if (name === "aim" && this.canType() && this.input && !(this.s?.phase === "deploy" && this.s.me.secret)) {
+      this.input = "";
+      this.renderSlots();
+      if (this.s?.phase === "deploy") this.dir.setCode("");
+      if (this.s?.phase === "battle" && this.s.turn === "me") {
+        this.conn?.send({ t: "aim", n: 0 });
+        this.app.world.cannons.me.target = 0.35;
+      }
+    }
+    if (name === "recon" || name === "sniper") this.clearPicks(name);
+    this.refresh();
   }
 
-  thumb() {
-    const b = this.el.switch.querySelector(`[data-pane="${this.paneName}"]`);
-    if (!b?.offsetWidth) return;
-    this.el.switch.style.setProperty("--x", `${b.offsetLeft}px`);
-    this.el.switch.style.setProperty("--w", `${b.offsetWidth}px`);
-  }
-
-  // The dock is as tall as the pane on show, so the keypad does not reserve the supply cards' height.
-  fitPanes() {
-    const p = [...this.el.panes.children].find((x) => x.dataset.pane === this.paneName);
-    if (p) this.el.panes.style.height = `${p.offsetHeight}px`;
+  markRead() {
+    this.unreadN = 0;
+    this.el.unread.hidden = true;
   }
 
   logView(v) {
@@ -845,9 +905,9 @@ export class MatchView {
     store("di.log", v);
   }
 
-  picker(host, list, key, label) {
+  picker(host, list, key, label, aria = null) {
     const kind = host.dataset.pickFor;
-    host.innerHTML = list.map((v) => `<button type="button" data-v="${v}" aria-pressed="false">${label(v)}</button>`).join("");
+    host.innerHTML = list.map((v) => `<button type="button" data-v="${v}" aria-pressed="false"${aria ? ` aria-label="${aria(v)}"` : ""}>${label(v)}</button>`).join("");
     for (const b of host.querySelectorAll("button")) {
       b.addEventListener("click", () => {
         const on = b.getAttribute("aria-pressed") !== "true";
@@ -860,9 +920,11 @@ export class MatchView {
     }
   }
 
-  clearPicks() {
-    this.sel = { recon: {}, sniper: {} };
-    for (const b of document.querySelectorAll(".pick button")) b.setAttribute("aria-pressed", "false");
+  clearPicks(kind = null) {
+    for (const k of kind ? [kind] : ["recon", "sniper"]) {
+      this.sel[k] = {};
+      for (const b of this.windows[k].querySelectorAll(".pick button")) b.setAttribute("aria-pressed", "false");
+    }
     this.updateReticle();
   }
 
@@ -877,23 +939,17 @@ export class MatchView {
     if (kind !== "smoke" && (sel.digit == null || (kind === "sniper" && sel.pos == null))) return;
     this.conn?.send({ t: "power", kind, digit: sel.digit, pos: sel.pos });
     this.powerSent = true;
-    this.sfx.play("click");
-    this.clearPicks();
-    this.pane("aim");
+    this.sfx.play("stamp");
+    store(`di.learned.${kind}`, "1");
+    this.clearPicks(kind === "smoke" ? null : kind);
+    this.desk.minimise(kind);
     this.refresh();
-  }
-
-  deckDots() {
-    const d = this.el.deck;
-    const card = d.firstElementChild;
-    const i = card ? Math.round(d.scrollLeft / (card.offsetWidth + 10)) : 0;
-    [...this.el.deckDots.children].forEach((dot, k) => dot.classList.toggle("on", k === i));
   }
 
   // The red ring over the enemy soldier your sniper would take, while you choose.
   updateReticle() {
     const pos = this.sel.sniper.pos;
-    const show = pos != null && this.paneName === "supplies" && !document.body.classList.contains("cine") && this.s?.phase === "battle";
+    const show = pos != null && this.desk.isOpen("sniper") && !document.body.classList.contains("cine") && this.s?.phase === "battle";
     this.aimAt = show ? this.app.army.squad("opp")[pos] : null;
     this.el.reticle.classList.toggle("on", !!this.aimAt);
     if (this.aimAt) this.el.reticleTag.textContent = `Spot ${pos + 1}`;
@@ -950,22 +1006,8 @@ export class MatchView {
       e.fireBtn.textContent = "FIRE";
       e.fireBtn.disabled = busy || !my || !isCode(this.input) || this.firing;
     }
-    const why = !my ? "Supplies go out on your turn" : s.me.supplies < 1 ? "No crates left" : s.me.powerUsed || this.powerSent ? "One crate a turn" : "";
-    const rules = s.orders || STANDARD_ORDERS;
-    for (const card of e.deck.children) {
-      const kind = card.dataset.power;
-      card.hidden = !rules[kind];
-      const ok = this.canPower(kind);
-      const sel = this.sel[kind] || {};
-      const ready = ok && (kind === "smoke" || (sel.digit != null && (kind !== "sniper" || sel.pos != null)));
-      card.classList.toggle("off", !ok && !busy);
-      card.classList.toggle("ready", ready);
-      card.querySelector("[data-go]").disabled = !ready;
-      for (const b of card.querySelectorAll(".pick button")) b.disabled = !ok;
-    }
-    const left = s.me.supplies;
-    e.deckNote.textContent = why || (s.me.smoke ? `Smoke is up. ${plural(left, "crate")} left` : `${plural(left, "crate")} left`);
-    e.crateBadge.textContent = s.phase === "battle" && left ? String(left) : "";
+    for (const kind of POWERS) this.refreshSupply(kind);
+    this.refreshBar();
     this.updateReticle();
     e.delBtn.disabled = !this.canType() || !this.input;
     e.markBtn.disabled = s.phase !== "battle";
@@ -982,6 +1024,77 @@ export class MatchView {
     }
   }
 
+  // Why a supply cannot go out right now, or "" when it can.
+  why(kind) {
+    const s = this.s;
+    if (!s || s.phase !== "battle" || s.turn !== "me") return "Supplies go out on your turn";
+    if (s.me.supplies < 1) return "No crates left";
+    if (kind === "smoke" && s.me.smoke) return "Your smoke is already up";
+    if (s.me.powerUsed || this.powerSent) return "One crate a turn";
+    if (this.animating) return "Wait for the smoke to clear";
+    return "";
+  }
+
+  // The icon's clay: full colour, dimmed when it is not your turn, a padlock once a crate went
+  // out this turn, grey clay with none left.
+  supplyState(kind) {
+    const s = this.s;
+    if (!s || s.phase !== "battle") return "dim";
+    if (s.me.supplies < 1) return "grey";
+    if (s.turn !== "me") return "dim";
+    if (s.me.powerUsed || this.powerSent || (kind === "smoke" && s.me.smoke)) return "lock";
+    return this.animating ? "dim" : "on";
+  }
+
+  refreshSupply(kind) {
+    const w = this.windows[kind];
+    const ok = this.canPower(kind);
+    const sel = this.sel[kind] || {};
+    const ready = ok && (kind === "smoke" || (sel.digit != null && (kind !== "sniper" || sel.pos != null)));
+    const why = this.why(kind);
+    const head = w.querySelector("[data-headline]");
+    const text = why || { recon: "Send the spotter plane", sniper: "Take the shot", smoke: "Pop smoke" }[kind];
+    if (head.textContent !== text) head.textContent = text;
+    head.classList.toggle("why", !!why);
+    const brief = w.querySelector("[data-brief]");
+    const short = store(`di.learned.${kind}`) === "1";
+    const btext = short ? brief.dataset.short : brief.dataset.brief;
+    if (brief.textContent !== btext) brief.textContent = btext;
+    w.classList.toggle("ready", ready);
+    w.querySelector("[data-go]").disabled = !ready;
+    for (const b of w.querySelectorAll(".pick button")) b.disabled = !ok;
+  }
+
+  refreshBar() {
+    const s = this.s;
+    if (!s) return;
+    const e = this.el;
+    const rules = s.orders || STANDARD_ORDERS;
+    const armed = anySupply(rules);
+    e.tbSupplies.hidden = !armed;
+    e.bar.classList.toggle("bare", !armed);
+    for (const kind of POWERS) {
+      const b = e.bar.querySelector(`[data-open="${kind}"]`);
+      b.hidden = !rules[kind];
+      const st = this.supplyState(kind);
+      b.dataset.clay = st;
+      const why = this.why(kind);
+      b.setAttribute("aria-description", why || "Ready");
+      this.app.icons?.setState(kind, st);
+      if (!rules[kind] && this.desk.state(kind) !== "closed") this.desk.close(kind);
+    }
+    const left = s.me.supplies;
+    const text = `\u00d7${left}`;
+    if (e.crateCount.textContent !== text) e.crateCount.textContent = text;
+    e.tbCrates.setAttribute("aria-label", `${plural(left, "crate")} left`);
+    e.tbCrates.classList.toggle("empty", left < 1);
+    const logB = e.bar.querySelector('[data-open="log"]');
+    logB.disabled = false;
+    const my = s.phase === "battle" && s.turn === "me";
+    this.app.icons?.setPulse("aim", my && !this.desk.isOpen("aim") && !this.animating);
+    this.app.icons?.setState("aim", s.phase === "deploy" || my ? "on" : "dim");
+  }
+
   renderLogs() {
     const s = this.s;
     const e = this.el;
@@ -992,7 +1105,7 @@ export class MatchView {
       else if (v.hits != null) res = `<span class="pill n">${plural(v.hits, "hit")} · smoke</span>`;
       else if (v.dead === 4) res = '<span class="pill w">cracked</span>';
       else res = `<span class="pill d">${v.dead} dead</span><span class="pill i">${v.injured} inj</span>`;
-      return `<li>${g}<span class="res">${res}</span></li>`;
+      return `<li class="v">${g}<span class="res">${res}</span></li>`;
     };
     const powerRow = (p) => {
       if (p.kind === "recon") return `<li class="power"><span><b>Recon</b> ${p.args.digit} ${p.result ? "is in their code" : "is not in their code"}</span></li>`;
@@ -1000,10 +1113,8 @@ export class MatchView {
       return `<li class="power"><span><b>Smoke</b> hid your squad</span></li>`;
     };
     const mine = [];
-    let at = 0;
     s.volleys.forEach((v, i) => {
-      for (const p of s.powers) if (p.at === i && p.at >= at) mine.push(powerRow(p));
-      at = i + 1;
+      for (const p of s.powers) if (p.at === i) mine.push(powerRow(p));
       if (v.by === "me") mine.push(row(v));
     });
     for (const p of s.powers) if (p.at >= s.volleys.length) mine.push(powerRow(p));
@@ -1015,9 +1126,18 @@ export class MatchView {
     e.logCount.textContent = mv + tv ? `${mv} out, ${tv} in` : "";
     const last = s.volleys.filter((v) => v.by === "me").pop();
     e.recent.hidden = !last;
-    if (last) e.recent.innerHTML = `<b>Last shot</b>${row(last).replace(/^<li>|<\/li>$/g, "")}`;
+    if (last) e.recent.innerHTML = `<b>Last shot</b>${row(last).replace(/^<li class="v">|<\/li>$/g, "")}`;
     e.mineLog.scrollTop = e.mineLog.scrollHeight;
     e.theirLog.scrollTop = e.theirLog.scrollHeight;
+    const n = s.volleys.length;
+    if (n < this.seenVolleys) this.seenVolleys = 0;
+    if (n > this.seenVolleys) {
+      if (!this.desk.isOpen("log")) this.unreadN += n - this.seenVolleys;
+      this.seenVolleys = n;
+    }
+    e.unread.hidden = !this.unreadN;
+    e.unread.textContent = String(this.unreadN);
+    e.bar.querySelector('[data-open="log"]').setAttribute("aria-description", this.unreadN ? `${plural(this.unreadN, "new volley")}` : "");
   }
 
   // The match clock: minutes left in the battle, frozen while a match against the computer is paused.
@@ -1042,7 +1162,7 @@ export class MatchView {
       this.idleAt = performance.now() + 5000;
       this.banner(this.input.length === 4 ? "Ready: hit Fire" : "Your shot", 3200);
       this.el.turn.classList.add("nudge");
-      this.note(this.input.length === 4 ? "<b>Four digits aimed.</b> Hit Fire when you are ready." : "<b>Your shot.</b> Aim four digits, or spend a crate from Supplies.", 4200);
+      this.note(this.input.length === 4 ? "<b>Four digits aimed.</b> Hit Fire when you are ready." : anySupply(this.s.orders || STANDARD_ORDERS) && this.s.me.supplies > 0 ? "<b>Your shot.</b> Aim four digits, or open a supply on the bar." : "<b>Your shot.</b> Aim four digits on the keypad.", 4200);
     }
     const total = s?.phase === "battle" ? s.turnMs : PHASE_MS[s?.phase];
     if (!this.active || !s || !s.deadline || !total || this.animating) {

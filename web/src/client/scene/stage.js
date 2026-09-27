@@ -28,7 +28,7 @@ export class Stage {
     this.sinceUp = 99;
     this.buffer = { w: 0, h: 0, dpr: 0 };
     this.worldOn = true;
-    this.overlay = null;
+    this.overlays = [];
     this.back = new THREE.Color(0x0c0d12);
     this.adaptive = !window.__vclock && !/[?&]hq\b/.test(location.search);
     this.resize();
@@ -92,10 +92,11 @@ export class Stage {
       r.setClearColor(this.back, this.alpha ? 0 : 1);
       r.clear();
     }
-    if (this.overlay?.active) {
+    for (const o of this.overlays) {
+      if (!o.active) continue;
       r.autoClear = false;
       r.clearDepth();
-      r.render(this.overlay.scene, this.overlay.camera);
+      r.render(o.scene, o.camera);
       r.autoClear = true;
     }
     if (this.adaptive) this.adapt(real);

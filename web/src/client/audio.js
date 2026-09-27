@@ -12,9 +12,12 @@ try { store = window.localStorage; } catch {}
 export class Sfx {
   constructor() {
     this.ctx = null;
-    let pref = null;
-    try { pref = store?.getItem("di.sound"); } catch {}
-    this.enabled = pref !== "off";
+    const pref = (k) => {
+      try { return store?.getItem(k); } catch { return null; }
+    };
+    this.enabled = pref("di.sound") !== "off";
+    this.effects = pref("di.effects") !== "off";
+    this.music = pref("di.music") !== "off";
     this.moodName = "silent";
     this.step = 0;
     this.lastHover = 0;
@@ -43,18 +46,26 @@ export class Sfx {
     comp.release.value = 0.22;
     this.master.connect(comp).connect(ctx.destination);
     this.bus = ctx.createGain();
+    this.bus.gain.value = this.effects ? 1 : 0;
     this.bus.connect(this.master);
     this.musicBus = ctx.createGain();
-    this.musicBus.gain.value = 0.55;
+    this.musicBus.gain.value = this.music ? 0.55 : 0;
     this.musicBus.connect(this.master);
     this.ambBus = ctx.createGain();
-    this.ambBus.gain.value = 0.7;
+    this.ambBus.gain.value = this.effects ? 0.7 : 0;
     this.ambBus.connect(this.master);
     this.verb = ctx.createConvolver();
     this.verb.buffer = this.impulse(2.8);
     const vg = ctx.createGain();
     vg.gain.value = 0.42;
     this.verb.connect(vg).connect(this.master);
+    // The reverb is shared, so each side of the mix sends to it through its own switch.
+    this.fxSend = ctx.createGain();
+    this.fxSend.gain.value = this.effects ? 1 : 0;
+    this.fxSend.connect(this.verb);
+    this.musicSend = ctx.createGain();
+    this.musicSend.gain.value = this.music ? 1 : 0;
+    this.musicSend.connect(this.verb);
     this.white = this.noise(2, "white");
     this.brown = this.noise(4, "brown");
     this.ambience();
@@ -63,8 +74,35 @@ export class Sfx {
     document.addEventListener("visibilitychange", () => {
       if (!this.ctx) return;
       if (document.hidden) this.ctx.suspend();
-      else if (this.enabled) this.ctx.resume();
+      else if (this.enabled && !this.frozen) this.ctx.resume();
     });
+  }
+
+  setEffects(on) {
+    this.effects = on;
+    try { store?.setItem("di.effects", on ? "on" : "off"); } catch {}
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.bus.gain.setTargetAtTime(on ? 1 : 0, t, 0.05);
+    this.ambBus.gain.setTargetAtTime(on ? 0.7 : 0, t, 0.05);
+    this.fxSend.gain.setTargetAtTime(on ? 1 : 0, t, 0.05);
+  }
+
+  setMusic(on) {
+    this.music = on;
+    try { store?.setItem("di.music", on ? "on" : "off"); } catch {}
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.musicBus.gain.setTargetAtTime(on ? 0.55 : 0, t, 0.05);
+    this.musicSend.gain.setTargetAtTime(on ? 1 : 0, t, 0.05);
+  }
+
+  // Pausing a match against the computer stops the sound with everything else, mid-note.
+  freeze(on) {
+    this.frozen = on;
+    if (!this.ctx) return;
+    if (on) this.ctx.suspend();
+    else if (this.enabled && !document.hidden) this.ctx.resume();
   }
 
   setEnabled(on) {
@@ -82,7 +120,7 @@ export class Sfx {
   }
 
   play(name, o = {}) {
-    if (!this.ctx || !this.enabled || this.ctx.state !== "running") return;
+    if (!this.ctx || !this.enabled || !this.effects || this.ctx.state !== "running") return;
     const f = this[`s_${name}`];
     if (!f) return;
     try { f.call(this, o, this.ctx.currentTime + (o.delay || 0)); } catch (e) { console.warn("sound", name, e); }
@@ -145,7 +183,7 @@ export class Sfx {
     node.connect(o.bus || this.bus);
     const send = ctx.createGain();
     send.gain.value = verb + (o.far || 0) * 0.35;
-    node.connect(send).connect(this.verb);
+    node.connect(send).connect(o.bus === this.musicBus ? this.musicSend : this.fxSend);
     return g;
   }
 
@@ -504,6 +542,30 @@ export class Sfx {
     this.hiss(t, out, { type: "bandpass", f: 3500, q: 1.4, peak: 0.5, d: 0.012 });
     const v = this.vca(t, 0.001, 0.25, 0.04, out);
     this.osc("sine", 1250, t, 0.04, v);
+  }
+
+  // A sheet slid out of a folder: a rising brush of paper.
+  s_paper(o, t) {
+    const out = this.out(o, t, { verb: 0.08, gain: 0.35 });
+    this.hiss(t, out, { type: "bandpass", f: 1400, to: 4200, q: 0.9, a: 0.02, peak: 0.55, d: 0.16 });
+    this.hiss(t + 0.03, out, { type: "highpass", f: 5200, peak: 0.18, d: 0.08 });
+  }
+
+  // Folded away: shorter, falling.
+  s_paperOff(o, t) {
+    const out = this.out(o, t, { verb: 0.06, gain: 0.3 });
+    this.hiss(t, out, { type: "bandpass", f: 3600, to: 1200, q: 0.9, a: 0.01, peak: 0.5, d: 0.11 });
+  }
+
+  // Knuckles on a crate lid.
+  s_knock(o, t) {
+    const out = this.out(o, t, { verb: 0.12, gain: 0.5 });
+    for (const [dt, f] of [[0, 210], [0.085, 190]]) {
+      this.thump(t + dt, out, f, f * 0.7, 0.09, 0.8);
+      const v = this.vca(t + dt, 0.001, 0.25, 0.05, out);
+      this.osc("triangle", f * 2.7, t + dt, 0.05, v);
+      this.hiss(t + dt, out, { type: "bandpass", f: 1800, q: 1.5, peak: 0.25, d: 0.02 });
+    }
   }
 
   s_hover(o, t) {

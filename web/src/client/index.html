@@ -15,6 +15,8 @@
 <link rel="apple-touch-icon" href="/icon-192.png">
 <link rel="manifest" href="/site.webmanifest">
 <link rel="preload" href="/fonts/archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/stardos-stencil-700.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/courier-prime-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="%SOLDIER%" as="fetch" crossorigin>
 <link rel="preload" href="%PROPS%" as="fetch" crossorigin>
 <link rel="stylesheet" href="%CSS%">
@@ -33,7 +35,7 @@
 <header class="top">
   <button class="brand" id="brand" type="button" aria-label="Dead &amp; Injured"><img src="/favicon.svg" alt="" width="26" height="26"></button>
   <div class="top-right">
-    <button class="btn ghost sm leave" id="leaveBtn" type="button" aria-label="Leave the match"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4.5H6.5a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1H14"/><path d="M10.5 12h9M16.5 8.5 20 12l-3.5 3.5"/></svg><span>Leave</span></button>
+    <button class="pause-btn" id="pauseBtn" type="button" aria-label="Pause" aria-keyshortcuts="Escape P" aria-haspopup="dialog"></button>
     <button class="btn ghost sm" id="manualBtn" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h5.5A2.5 2.5 0 0 1 13 7v12.5a2 2 0 0 0-2-2H5zM19 4.5h-3.5A2.5 2.5 0 0 0 13 7v12.5a2 2 0 0 1 2-2h4z"/></svg><span>Field manual</span></button>
     <button class="icon-btn sound" id="soundBtn" type="button" aria-pressed="true" aria-label="Sound">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/><path class="on" d="M15.5 9a4.2 4.2 0 0 1 0 6M18.2 6.6a7.6 7.6 0 0 1 0 10.8"/><path class="off" d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
@@ -103,15 +105,10 @@
     </div>
     <p class="note" id="note"></p>
 
-    <div class="rps" id="rps">
-      <button type="button" data-pick="rock"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M10 30c-3-6 1-13 7-15 3-6 11-7 15-2 6 0 10 6 7 12 2 5-2 11-8 11H18c-4 0-7-2-8-6z"/></svg><span>Rock</span></button>
-      <button type="button" data-pick="paper"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M13 7h16l7 7v27H13z"/><path d="M29 7v7h7M18 21h13M18 27h13M18 33h9"/></svg><span>Paper</span></button>
-      <button type="button" data-pick="scissors"><svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="14" cy="34" r="5"/><circle cx="30" cy="36" r="5"/><path d="M17 30 38 8M26 32 20 10"/></svg><span>Scissors</span></button>
-    </div>
-
-    <div class="dock" id="dock">
-      <div class="panes" id="panes">
-        <div class="pane aim" id="paneAim" data-pane="aim">
+    <div class="desk" id="desk">
+      <section class="w w-aim" id="w-aim" data-win="aim" aria-labelledby="aimTitle" hidden>
+        <header class="w-bar"><h2 class="w-title" id="aimTitle">Fire control</h2><span class="w-tools"><button type="button" class="w-min" aria-label="Minimise fire control"></button><button type="button" class="w-x" aria-label="Close fire control"></button></span></header>
+        <div class="w-body">
           <button type="button" class="recent" id="recent" hidden></button>
           <div class="slots" id="slots" aria-live="off"><span></span><span></span><span></span><span></span></div>
           <div class="pad" id="pad" role="group" aria-label="Keypad">
@@ -120,62 +117,84 @@
             <button type="button" class="del" id="delBtn" aria-label="Delete"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 5.5H20v13H9.5L3.5 12z"/><path d="M12.5 9.5l5 5M17.5 9.5l-5 5"/></svg></button>
             <button type="button" class="mark" id="markBtn" aria-pressed="false" aria-label="Mark digits you have ruled in or out" title="Mark digits"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 19.5l4-1 10-10-3-3-10 10zM13.5 7.5l3 3"/></svg></button>
             <button type="button" class="rand" id="randomBtn" aria-label="A random code" title="A random code"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3.5"/><circle cx="9" cy="9" r="1.1"/><circle cx="15" cy="15" r="1.1"/><circle cx="15" cy="9" r="1.1"/><circle cx="9" cy="15" r="1.1"/></svg></button>
-            <button type="button" class="fire" id="fireBtn">FIRE</button>
+            <button type="button" class="fire" id="fireBtn">Fire</button>
           </div>
         </div>
+      </section>
 
-        <div class="pane supplies" id="paneSupplies" data-pane="supplies">
-          <div class="deck" id="deck">
-            <article class="supply" data-power="recon">
-              <header><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12.5 21 7l-4.5 6.5L21 17z"/><path d="M8 11.2l1.6 6.3"/></svg><div><b>Recon plane</b><small>One crate</small></div></header>
-              <p>A spotter plane photographs their trench. Pick a digit and the pilot drops a flare: green if it is anywhere in their code, red if not.</p>
-              <div class="pick digits" data-pick-for="recon" role="group" aria-label="Digit"></div>
-              <button type="button" class="btn sm go" data-go="recon">Send the plane</button>
-            </article>
-            <article class="supply" data-power="sniper">
-              <header><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 3v5M12 16v5M3 12h5M16 12h5"/><circle cx="12" cy="12" r="1"/></svg><div><b>Sniper</b><small>One crate</small></div></header>
-              <p>Pick a digit and one of their four soldiers. A hit proves the digit sits in his spot. Miss, and he lives to laugh about it.</p>
-              <div class="pick digits" data-pick-for="sniper" role="group" aria-label="Digit"></div>
-              <div class="pick spots" data-pick-for="sniper" role="group" aria-label="Soldier"></div>
-              <button type="button" class="btn sm go" data-go="sniper">Take the shot</button>
-            </article>
-            <article class="supply" data-power="smoke">
-              <header><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18.5a4 4 0 0 1-.4-8A5.5 5.5 0 0 1 17 9.2a4.7 4.7 0 0 1 .3 9.3z"/><path d="M9 14.5h6"/></svg><div><b>Smoke</b><small>One crate</small></div></header>
-              <p>Smoke hides your squad. Their next volley only reports how many it hit, not which were dead and which injured.</p>
-              <button type="button" class="btn sm go" data-go="smoke">Pop smoke</button>
-            </article>
+      <section class="w w-supply" id="w-recon" data-win="recon" data-power="recon" aria-labelledby="reconTitle" hidden>
+        <header class="w-bar"><h2 class="w-title" id="reconTitle">Recon</h2><span class="w-tools"><button type="button" class="w-min" aria-label="Minimise recon"></button><button type="button" class="w-x" aria-label="Close recon"></button></span></header>
+        <div class="w-body">
+          <div class="photo" data-preview="recon" aria-hidden="true"><span class="clip"></span></div>
+          <p class="headline" data-headline>Send the spotter plane</p>
+          <p class="brief" data-brief="A spotter plane photographs their trench. Pick a digit and the pilot drops a flare: green if it is anywhere in their code, red if not." data-short="Pick a digit: green flare if it is in their code, red if not."></p>
+          <div class="pick digits" data-pick-for="recon" role="group" aria-label="Digit"></div>
+          <button type="button" class="go" data-go="recon">Send the plane</button>
+        </div>
+      </section>
+      <section class="w w-supply" id="w-sniper" data-win="sniper" data-power="sniper" aria-labelledby="sniperTitle" hidden>
+        <header class="w-bar"><h2 class="w-title" id="sniperTitle">Sniper</h2><span class="w-tools"><button type="button" class="w-min" aria-label="Minimise sniper"></button><button type="button" class="w-x" aria-label="Close sniper"></button></span></header>
+        <div class="w-body">
+          <div class="photo scope-view" data-preview="sniper" aria-hidden="true"><span class="clip"></span><i class="cross"></i></div>
+          <p class="headline" data-headline>Take the shot</p>
+          <p class="brief" data-brief="Pick a digit and one of their four soldiers, here or on the field. A hit proves the digit sits in his spot. Miss, and he lives to laugh about it." data-short="A digit and a soldier: a hit proves the digit is in his spot."></p>
+          <div class="pick digits" data-pick-for="sniper" role="group" aria-label="Digit"></div>
+          <div class="pick spots" data-pick-for="sniper" role="group" aria-label="Soldier"></div>
+          <button type="button" class="go" data-go="sniper">Take the shot</button>
+        </div>
+      </section>
+      <section class="w w-supply" id="w-smoke" data-win="smoke" data-power="smoke" aria-labelledby="smokeTitle" hidden>
+        <header class="w-bar"><h2 class="w-title" id="smokeTitle">Smoke</h2><span class="w-tools"><button type="button" class="w-min" aria-label="Minimise smoke"></button><button type="button" class="w-x" aria-label="Close smoke"></button></span></header>
+        <div class="w-body">
+          <div class="photo" data-preview="smoke" aria-hidden="true"><span class="clip"></span></div>
+          <p class="headline" data-headline>Pop smoke</p>
+          <p class="brief" data-brief="Smoke hides your squad. Their next volley only reports how many it hit, not which were dead and which injured." data-short="Their next volley only reports how many it hit."></p>
+          <button type="button" class="go" data-go="smoke">Pop smoke</button>
+        </div>
+      </section>
+
+      <section class="w w-log" id="w-log" data-win="log" aria-labelledby="logTitle" hidden>
+        <header class="w-bar"><h2 class="w-title" id="logTitle">Notebook</h2><em id="logCount"></em><span class="w-tools"><button type="button" class="w-min" aria-label="Minimise the notebook"></button><button type="button" class="w-x" aria-label="Close the notebook"></button></span></header>
+        <div class="tabs" id="logSeg" role="tablist" aria-label="Volleys">
+          <button type="button" role="tab" data-log="mine" aria-selected="true">Your fire</button>
+          <button type="button" role="tab" data-log="theirs" aria-selected="false">Their fire</button>
+          <button type="button" role="tab" data-log="both" aria-selected="false">Compare</button>
+        </div>
+        <div class="w-body page">
+          <div class="logs" id="logs" data-show="mine">
+            <ol class="log mine" id="mineLog"></ol>
+            <ol class="log theirs" id="theirLog"></ol>
           </div>
-          <div class="deck-foot"><span class="dots" id="deckDots"><i class="on"></i><i></i><i></i></span><span class="deck-note" id="deckNote"></span></div>
+          <p class="mycode"><span>Your code</span><span class="tiles mini" id="myCode"></span></p>
         </div>
+      </section>
 
-        <div class="pane log-pane" id="paneLog" data-pane="log">
-          <div class="win logwin" id="logWin">
-            <div class="win-bar"><i></i><i></i><i></i><span>fire.log</span><em id="logCount"></em></div>
-            <div class="seg" id="logSeg" role="tablist" aria-label="Volleys">
-              <button type="button" role="tab" data-log="mine" aria-selected="true">Your fire</button>
-              <button type="button" role="tab" data-log="theirs" aria-selected="false">Their fire</button>
-              <button type="button" role="tab" data-log="both" aria-selected="false">Compare</button>
-            </div>
-            <div class="logs" id="logs" data-show="mine">
-              <ol class="log mine" id="mineLog"></ol>
-              <ol class="log theirs" id="theirLog"></ol>
-            </div>
-            <p class="mycode"><span>Your code</span><span class="tiles mini" id="myCode"></span></p>
-          </div>
-        </div>
-      </div>
-
-      <div class="switch-row" id="switchRow">
-        <div class="switch" id="switch" role="tablist" aria-label="Dock">
-          <i class="thumb" aria-hidden="true"></i>
-          <button type="button" role="tab" data-pane="aim" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 5v3M12 16v3M5 12h3M16 12h3"/></svg><span>Aim</span></button>
-          <button type="button" role="tab" data-pane="supplies" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5z"/><path d="M4 8.5 12 13l8-4.5M12 13v7"/></svg><span>Supplies<em id="crateBadge"></em></span></button>
-          <button type="button" role="tab" data-pane="log" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7h10M9 12h10M9 17h10M5 7h.01M5 12h.01M5 17h.01"/></svg><span>Log</span></button>
-        </div>
-        <button type="button" class="icon-btn taunt-btn" id="tauntBtn" aria-label="Send a taunt" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5h-8l-4.5 3.5v-3.5H5A1.5 1.5 0 0 1 3.5 15V7A1.5 1.5 0 0 1 5 5.5z"/><path d="M8 10.5h.01M12 10.5h.01M16 10.5h.01"/></svg></button>
-      </div>
-      <div class="taunts" id="taunts" hidden></div>
+      <section class="w w-chat" id="w-chat" data-win="chat" aria-labelledby="chatTitle" hidden>
+        <header class="w-bar"><h2 class="w-title" id="chatTitle">Shout across</h2><span class="w-tools"><button type="button" class="w-min" aria-label="Minimise taunts"></button><button type="button" class="w-x" aria-label="Close taunts"></button></span></header>
+        <div class="w-body"><div class="taunts" id="taunts"></div></div>
+      </section>
     </div>
+
+    <nav class="bar" id="bar" aria-label="Tools">
+      <div class="plank" id="plank">
+        <button type="button" class="tb" data-open="aim" data-key="A" aria-label="Fire control"><i class="mk"></i></button>
+        <span class="lash" aria-hidden="true"></span>
+        <span class="tb-group" id="tbSupplies">
+          <button type="button" class="tb" data-open="recon" data-key="R" aria-label="Recon plane"><i class="mk"></i></button>
+          <button type="button" class="tb" data-open="sniper" data-key="S" aria-label="Sniper"><i class="mk"></i></button>
+          <button type="button" class="tb" data-open="smoke" data-key="M" aria-label="Smoke"><i class="mk"></i></button>
+          <span class="tb-crates" id="tbCrates" role="status"><i class="tb-crate" id="tbCrate"></i><b id="crateCount"></b></span>
+        </span>
+        <span class="lash" aria-hidden="true"></span>
+        <button type="button" class="tb" data-open="log" data-key="L" aria-label="Field notebook"><i class="mk"></i><b class="unread" id="unread" hidden></b></button>
+        <button type="button" class="tb" data-open="chat" data-key="T" aria-label="Taunts"><i class="mk"></i></button>
+      </div>
+      <div class="plank hands" id="rps">
+        <button type="button" class="tb hand" data-pick="rock" data-key="R" aria-label="Rock"><span>Rock</span></button>
+        <button type="button" class="tb hand" data-pick="paper" data-key="P" aria-label="Paper"><span>Paper</span></button>
+        <button type="button" class="tb hand" data-pick="scissors" data-key="S" aria-label="Scissors"><span>Scissors</span></button>
+      </div>
+    </nav>
 
     <div class="over" id="over">
       <div class="win card">
@@ -271,15 +290,26 @@
 </dialog>
 
 
-<dialog class="dlg" id="leaveDlg">
-  <form method="dialog" class="win">
-    <div class="win-bar"><i></i><i></i><i></i><span>retreat</span></div>
-    <div class="win-body">
-      <p class="big">Leave the field?</p>
-      <p class="muted" id="leaveText">Leaving now hands the win to your opponent.</p>
-      <div class="row"><button type="submit" class="btn danger" value="go">Leave</button><button type="button" class="btn ghost" data-close>Stay</button></div>
+<dialog class="pause" id="pauseDlg" aria-labelledby="pauseTitle">
+  <div class="board-clip">
+    <span class="clamp" aria-hidden="true"></span>
+    <div class="sheet">
+      <p class="sheet-head"><span id="pauseTitle">Standing orders</span><em id="pauseTag">Halted</em></p>
+      <p class="sheet-note" id="pauseNote"></p>
+      <ul class="orders" id="pauseList">
+        <li><button type="button" class="order" data-p="resume">Resume</button></li>
+        <li><button type="button" class="order" data-p="manual">Field manual</button></li>
+        <li class="row-set"><span class="order-name">Sound</span><span class="opts"><button type="button" class="opt" data-p="effects" aria-pressed="true">Effects</button><button type="button" class="opt" data-p="music" aria-pressed="true">Music</button></span></li>
+        <li class="row-set"><span class="order-name">Graphics</span><span class="opts" role="radiogroup" aria-label="Graphics"><button type="button" class="opt" role="radio" data-gfx="auto" aria-checked="true">Auto</button><button type="button" class="opt" role="radio" data-gfx="sharp" aria-checked="false">Sharp</button><button type="button" class="opt" role="radio" data-gfx="fast" aria-checked="false">Fast</button></span></li>
+        <li id="introRow" hidden><button type="button" class="order" data-p="intro">Replay the intro</button></li>
+        <li><button type="button" class="order quit" data-p="quit">Quit game</button></li>
+      </ul>
+      <div class="confirm" id="quitConfirm" hidden>
+        <p class="sheet-note" id="leaveText">Leaving now hands the win to your opponent.</p>
+        <p class="confirm-row"><button type="button" class="order quit" data-p="leave">Leave the field</button><button type="button" class="order" data-p="stay">Stay</button></p>
+      </div>
     </div>
-  </form>
+  </div>
 </dialog>
 
 <div class="toast" id="toast" role="status"></div>

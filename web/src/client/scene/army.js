@@ -32,6 +32,15 @@ const X = new THREE.Vector3(1, 0, 0);
 const Y = new THREE.Vector3(0, 1, 0);
 
 const damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt));
+// Hands up: where the upper arms and forearms point, as out (away from the body), up and forward.
+export const HANDS = { arm: [0.72, 0.62, 0.12], fore: [0.1, 1, 0.12] };
+const qA = new THREE.Quaternion();
+const qB = new THREE.Quaternion();
+const qT = new THREE.Quaternion();
+const vA = new THREE.Vector3();
+const vB = new THREE.Vector3();
+const vC = new THREE.Vector3();
+const ID = new THREE.Quaternion();
 const rand = (a, b) => a + Math.random() * (b - a);
 
 function paint(geo, colors) {
@@ -170,7 +179,11 @@ class Soldier {
     this.body.material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.74, metalness: 0 });
     this.body.frustumCulled = false;
     const bone = (n) => this.rig.getObjectByName(n);
-    this.bones = { head: bone("Head"), hand: bone("Index1R"), abdomen: bone("Abdomen"), neck: bone("Neck"), hips: bone("Hips") };
+    this.bones = {
+      head: bone("Head"), hand: bone("Index1R"), abdomen: bone("Abdomen"), neck: bone("Neck"), hips: bone("Hips"),
+      armL: bone("UpperArmL"), armR: bone("UpperArmR"), foreL: bone("LowerArmL"), foreR: bone("LowerArmR"),
+    };
+    this.hands = 0;
 
     this.mixer = new THREE.AnimationMixer(this.rig);
     this.acts = {};
@@ -264,9 +277,18 @@ class Soldier {
     return out.setFromMatrixPosition(this.bones.head.matrixWorld).setY(out.y + lift);
   }
 
-  cheer() {
+  // Gives in: the rifle goes down, he drops to one knee and puts his hands up.
+  surrender(delay = 0) {
+    if (!this.alive) return;
+    this.set("surrender");
+    this.gaveUp = false;
+    this.t = -delay;
+  }
+
+  cheer(hold = 3.5) {
     if (!this.alive || this.state === "wounded") return;
     this.set("cheer");
+    this.cheerFor = hold;
     this.play("Wave", { fade: 0.2, speed: rand(1.25, 1.45), at: Math.random() });
   }
 
@@ -373,9 +395,18 @@ class Soldier {
         if (this.clip === "HitReact" && done) this.play("Idle", { fade: 0.35, speed: 0.62, at: Math.random() });
         break;
       }
+      case "surrender": {
+        if (this.t < 0) break;
+        if (this.clip !== "Idle" || !this.gaveUp) {
+          this.gaveUp = true;
+          this.play("Idle", { fade: 0.4, at: 0.2, speed: 0.35 });
+          if (this.rifle.on) this.knock(this.rifle, 0.4, 1.2, 2, tmpW.set(0, 0, -this.sd.dir));
+        }
+        break;
+      }
       case "cheer":
         lift = Math.abs(Math.sin(this.t * 7 + this.phase)) * 0.32;
-        if (this.t > 3.5) {
+        if (this.t > (this.cheerFor ?? 3.5)) {
           this.set("idle");
           this.stance();
         }
@@ -426,6 +457,7 @@ class Soldier {
     this.lift = damp(this.lift, lift, 18, dt);
     this.hurt = damp(this.hurt, hurt, 6, dt);
     this.lookNow = damp(this.lookNow, this.state === "idle" && !this.aiming ? this.look : 0, 3, dt);
+    this.hands = damp(this.hands, this.state === "surrender" && this.t > 0.5 ? 1 : 0, 4, dt);
     this.helmet.update(dt);
     this.rifle.update(dt);
   }
@@ -466,10 +498,41 @@ class Soldier {
     this.bend(b.head, Y, this.lookNow, 0);
     this.bend(b.abdomen, X, 0.42 * this.hurt, 1);
     this.bend(b.neck, X, 0.2 * this.hurt, 2);
+    const h = this.hands;
+    const bones = (this.bent ||= []);
+    for (let k = 3; k < 7; k++) bones[k] = null;
+    if (h < 0.001) return;
+    const H = this.army.handsUp;
+    // The body's own axes, from where its shoulders and head actually are this frame.
+    b.armL.updateWorldMatrix(true, false);
+    b.armR.updateWorldMatrix(true, false);
+    const out = vA.setFromMatrixPosition(b.armL.matrixWorld).sub(vB.setFromMatrixPosition(b.armR.matrixWorld)).setY(0).normalize();
+    const fwd = vC.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+    for (const [arm, fore, sign, k] of [[b.armL, b.foreL, 1, 3], [b.armR, b.foreR, -1, 4]]) {
+      const dir = (w) => new THREE.Vector3().addScaledVector(out, w[0] * sign).add(new THREE.Vector3(0, w[1], 0)).addScaledVector(fwd, w[2]).normalize();
+      this.aimBone(arm, fore, dir(H.arm), h, k);
+      const hand = fore.children.find((c) => c.isBone);
+      if (hand) this.aimBone(fore, hand, dir(H.fore), h, k + 2);
+    }
+  }
+
+  // Turns a bone so the one after it points along `to` (world), by `w` of the way there.
+  aimBone(bone, child, to, w, k) {
+    const saved = (this.saved ||= Array.from({ length: 7 }, () => new THREE.Quaternion()));
+    this.bent[k] = bone;
+    saved[k].copy(bone.quaternion);
+    bone.updateWorldMatrix(true, false);
+    child.updateWorldMatrix(false, false);
+    const from = vB.setFromMatrixPosition(child.matrixWorld).sub(tmpV.setFromMatrixPosition(bone.matrixWorld)).normalize();
+    qA.copy(ID).slerp(qT.setFromUnitVectors(from, to), w);
+    bone.parent.getWorldQuaternion(qB);
+    // new local = parent^-1 * turn * parent * local
+    bone.quaternion.premultiply(qB).premultiply(qA).premultiply(qB.invert());
+    bone.updateWorldMatrix(false, true);
   }
 
   bend(bone, axis, angle, k) {
-    const saved = (this.saved ||= [new THREE.Quaternion(), new THREE.Quaternion(), new THREE.Quaternion()]);
+    const saved = (this.saved ||= Array.from({ length: 7 }, () => new THREE.Quaternion()));
     const bones = (this.bent ||= []);
     bones[k] = Math.abs(angle) > 0.001 ? bone : null;
     if (!bones[k]) return;
@@ -502,6 +565,7 @@ export class Army {
   constructor(stage, kit) {
     this.stage = stage;
     this.kit = kit;
+    this.handsUp = HANDS;
     this.listeners = {};
     this.soldiers = [];
     for (const side of ["me", "opp"]) for (let i = 0; i < 4; i++) this.soldiers.push(new Soldier(this, side, i, kit));
@@ -625,6 +689,7 @@ export class Army {
 
   reset() {
     for (const s of this.soldiers) {
+      s.hands = 0;
       s.respawn(0);
       s.pos.copy(s.home);
       s.set("idle");
