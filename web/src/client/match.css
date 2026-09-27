@@ -745,3 +745,6 @@ body.cine .hud, body.cine .desk, body.cine .bar, body.cine .note, body.cine .top
   .verdict { top: calc(var(--top) + 48px); right: calc(min(360px, 46vw) + var(--pad)); }
   .vd-ink b { font-size: 40px; }
 }
+
+/* The cross-fade that stands in for a camera journey under reduced motion. */
+.veil { position: fixed; inset: 0; z-index: 30; background: #2a1c1c; opacity: 0; pointer-events: none; }

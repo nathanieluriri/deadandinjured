@@ -156,6 +156,60 @@ export class Director {
     });
   }
 
+  // A journey through the world in one take: the camera rides a smooth curve through the
+  // waypoints, looking a little ahead of itself as a walking operator would, and settles on the
+  // framing of the shot it is going to. Under reduced motion it cross-fades instead.
+  travel(name, via = [], { dur = null, ease = "sine.inOut" } = {}) {
+    const to = this.shotFor(name);
+    gsap.killTweensOf([this.pos, this.look, this]);
+    this.journey?.kill();
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return this.fade(() => this.applyShot(name, true));
+    this.name = name;
+    const curve = new THREE.CatmullRomCurve3([this.pos.clone(), ...via.map((p) => V(...p)), to.pos], false, "centripetal");
+    const time = dur ?? Math.min(3, Math.max(1.6, 1.1 + curve.getLength() * 0.08));
+    const look0 = this.look.clone();
+    const fov0 = this.fov;
+    const s = { u: 0 };
+    const ahead = V();
+    const aim = V();
+    const smooth = (a, b, x) => {
+      const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+      return t * t * (3 - 2 * t);
+    };
+    return new Promise((done) => {
+      this.journey = gsap.to(s, {
+        u: 1, duration: time, ease,
+        onUpdate: () => {
+          curve.getPointAt(s.u, this.pos);
+          curve.getPointAt(Math.min(1, s.u + 0.08), ahead);
+          aim.subVectors(ahead, this.pos);
+          if (aim.lengthSq() > 1e-6) aim.setLength(6).add(this.pos);
+          else aim.copy(to.look);
+          this.look.copy(look0).lerp(aim, smooth(0, 0.3, s.u)).lerp(to.look, smooth(0.55, 1, s.u));
+          this.fov = fov0 + (to.fov - fov0) * smooth(0.4, 1, s.u);
+        },
+        onComplete: () => {
+          this.journey = null;
+          done();
+        },
+      });
+    });
+  }
+
+  // A second click during a journey speeds it up; the take never cuts.
+  hurry() {
+    this.journey?.timeScale(3);
+  }
+
+  fade(swap) {
+    const veil = (this.veil ||= Object.assign(document.createElement("div"), { className: "veil" }));
+    if (!veil.isConnected) document.body.append(veil);
+    return veil.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, fill: "forwards" }).finished.then(() => {
+      swap();
+      return veil.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, fill: "forwards" }).finished;
+    });
+  }
+
   // A camera move to any framing, for the moments that follow one soldier or one plane.
   move(pos, look, fov, dur = 1, ease = "power3.inOut") {
     gsap.killTweensOf([this.pos, this.look, this]);
