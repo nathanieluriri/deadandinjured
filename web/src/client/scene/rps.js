@@ -49,7 +49,7 @@ function rock(color) {
     v.y *= 0.82;
     p.setXYZ(i, v.x, v.y, v.z);
   }
-  const out = g.toNonIndexed();
+  const out = g.index ? g.toNonIndexed() : g;
   out.computeVertexNormals();
   const c = new THREE.Color(color);
   const col = new Float32Array(out.attributes.position.count * 3);
