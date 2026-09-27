@@ -19,6 +19,15 @@ The screenshots and their detailed descriptions are in [`references/`](reference
 
 The owner's words are quoted exactly under each request.
 
+## Decisions so far
+
+| Date | Question | The owner's answer |
+|---|---|---|
+| 27 September 2026 | Crates: does the draw's loser get fewer, or do both sides get the same number? | "Yes the loser gets fewer": the winner gets the number set, the loser one fewer and the first shot |
+| 27 September 2026 | Are 5, 10 and 15 minutes the right time limits? | "Yessss they are" |
+| 27 September 2026 | When time runs out: closest to cracking, or sudden death? | "Closest to cracking" |
+| 27 September 2026 | Do matches against the computer get the same setup step? | "Yesssss" |
+
 ---
 
 ## 1. The bottom controls become a taskbar of 3D icons
@@ -315,20 +324,28 @@ When a player **opens a room** (Play a friend), they set up the match before the
 
 The defaults reproduce today's game, plus the new time limit.
 
-#### Crates: how the number is shared out
+#### Crates: how the number is shared out (decided)
 
-Two sensible rules; one needs choosing:
+**The loser gets fewer.** The winner of rock, paper, scissors gets the chosen number of crates; the loser gets one fewer and fires first.
 
-- **A. Keep the draw's reward (recommended)**: the winner of rock, paper, scissors gets the chosen number, the loser gets one fewer and fires first. With 3 this is exactly today's game (3 and 2). With 1, the winner gets one crate and the loser gets none but shoots first.
-- **B. Equal crates**: both sides get the chosen number and the draw only decides who fires first. Simpler to explain, but the draw matters less.
+| Crates set | Draw winner | Draw loser (fires first) |
+|---|---|---|
+| 1 | 1 | 0 |
+| 2 | 2 | 1 |
+| 3 (default, today's game) | 3 | 2 |
+| 4 | 4 | 3 |
+| 5 | 5 | 4 |
+
+The alternative that was considered and not chosen: equal crates for both sides, with the draw only deciding who fires first.
 
 #### Supplies off
 
 - No crates, no supply icons in the match, no supply rows in the log, and the manual's supplies page says they are off for this match.
 - The rock, paper, scissors draw stays (it is a good moment), but its prize becomes the first shot: **the winner fires first**.
 
-#### Time limit: what happens when time runs out
+#### Time limit: what happens when time runs out (decided: closest to cracking wins)
 
+- The choices are 5, 10 and 15 minutes, confirmed by the owner. There is no "no limit" option: every match ends.
 - The clock starts when the battle starts (after both codes are deployed) and is shown in the HUD next to the turn banner (for example "8:42").
 - The per-turn limit of 60 seconds stays, so nobody can stall inside the match clock.
 - **Fair ending**: when the clock reaches zero, the current round is finished first. If the first shooter has fired this round and the second has not, the second shooter still gets their shot (the same fairness idea as the last stand). A last stand in progress also finishes.
@@ -348,18 +365,19 @@ Two sensible rules; one needs choosing:
 | **Play a friend, Open a room** | The host chooses. The joining player sees the rules before and after joining ("Supplies on, 3 crates, 10 minutes"). |
 | **Rematch** | Keeps the same rules. |
 | **Quick match** | Standard rules for everyone (Supplies on, 3 crates, 10 minutes), so strangers always play the same game. |
-| **Play the computer** | Proposed: the same setup step after choosing a commander, pre-set to the standard rules, so a player can practise without supplies or against the clock. The computer already only uses supplies it has. |
+| **Play the computer** | Decided: the same setup step, after choosing a commander, pre-set to the standard rules, so a player can practise without supplies or against the clock. The computer already only uses supplies it has. The match clock runs; the 60-second turn limit stays off against the computer, as today. |
 
 ### What this changes under the hood (for later)
 
 - **Rules object** stored with the match, for example `g.rules = { supplies: true, crates: 3, minutes: 10 }`, created by `newGame()` and validated on the server (crates clamped to 1 to 5, minutes one of 5, 10, 15, anything else falls back to the defaults).
 - **Opening a room**: `POST /api/rooms` accepts the three settings; `Room.init()` stores them.
 - **Peeking at a room**: `GET /api/rooms/:code` also returns the rules, so the join screen can show them before joining.
-- **The draw**: `resolveRps()` hands out crates from the rules (rule A or B) or none when supplies are off, and picks the first shooter accordingly.
+- **The draw**: `resolveRps()` hands out crates from the rules (the chosen number to the winner, one fewer to the loser) or none when supplies are off, and picks the first shooter accordingly.
 - **Supplies**: `act()` rejects any supply when supplies are off ("Supplies are off in this match").
 - **The clock**: `startBattle()` sets `g.clockEnds = now + minutes`; `tick()` checks it, finishes the round fairly and calls `finish()` with a new reason, `"time"`, and the winner from the best-volley comparison. The Room's alarm must wake at the earliest of the turn deadline, the clock end and the room's expiry (today it only watches the first and the last).
 - **What the client sees**: `view()` includes the rules and `clockEnds`, so the HUD can show the clock, and the supply icons can hide when supplies are off.
 - **Solo matches**: `LocalMatch` passes the same rules; the match clock runs even though the per-turn timers stay off against the computer.
+- **Solo results**: today `POST /api/solo` counts anything that is not a win as a loss. A match against the computer can now end in a draw on time, so a draw must not be sent as a loss: either record nothing for it, or add a `solo_draws` column to `players` (a small D1 change).
 - **Records**: the rules go into the match's JSON log (no database change needed). A win on time counts as a win; "best" (fewest shots to crack) still only counts codes actually cracked.
 - **Tests**: engine tests for every crate count under both rules, supplies off, the clock running out before, during and after a round, each tiebreak step, and the alarm schedule.
 
@@ -374,12 +392,11 @@ In the signals dugout, before the room code appears:
 
 ### Open questions for the owner
 
-1. Crates: rule A (the draw winner gets the number, the loser one fewer and the first shot) or rule B (both get the same)?
-2. Time limits: are 5, 10 and 15 minutes the right choices, and should "no limit" never be offered?
-3. At time up: is "closest to cracking wins" (best volley) the rule you want, or do you prefer something else, such as sudden death (the next volley that beats the other side's best wins)?
-4. Should the per-turn limit shrink for short matches (for example 30 seconds per turn in a 5-minute match)?
-5. Should matches against the computer get the same setup step?
-6. Should the host also be able to switch off individual supplies (for example no Sniper)?
+Answered on 27 September 2026: the loser of the draw gets fewer crates; the limits are 5, 10 and 15 minutes; closest to cracking wins at time up; matches against the computer get the setup step. Still open:
+
+1. Should the per-turn limit shrink for short matches (for example 30 seconds per turn in a 5-minute match)?
+2. Should the host also be able to switch off individual supplies (for example no Sniper)?
+3. A draw against the computer on time: record nothing, or keep a count of solo draws?
 
 ---
 
@@ -406,11 +423,10 @@ These apply to every request above:
 2. Pause: in the top corner, or on the taskbar?
 3. Title frame: a signpost, a crate, a banner, or a dossier on a map table?
 4. A first-time intro flight over the field on the title screen?
-5. Crates: rule A or rule B?
-6. Time limits: 5, 10 and 15 minutes? Never "no limit"?
-7. Time up: best volley wins, or sudden death?
-8. Shorter turns in short matches?
-9. Match setup against the computer too?
-10. Allow switching off individual supplies?
+5. Shorter turns in short matches?
+6. Allow switching off individual supplies?
+7. A draw against the computer on time: record nothing, or count solo draws?
+
+The four match-setup questions are answered (see "Decisions so far" at the top).
 
 The owner said more corrections are coming; this document will be updated with them before any work starts.
