@@ -98,7 +98,7 @@
   <section class="screen match" id="match" aria-label="Match">
     <div class="hud">
       <div class="side me"><b class="name" id="meName">You</b><span class="crates" id="meCrates"></span></div>
-      <div class="turn" id="turn"><span id="turnLabel"></span><span class="timer" id="timer"><i></i></span></div>
+      <div class="turn" id="turn"><span id="turnLabel"></span><span class="timer" id="timer"><i></i></span><span class="clock" id="clock" role="timer" aria-label="Match clock" hidden></span></div>
       <div class="side opp"><b class="name" id="oppName">Enemy</b><span class="crates" id="oppCrates"></span><i class="dot" id="oppDot" title="Online"></i></div>
     </div>
     <p class="note" id="note"></p>
@@ -239,6 +239,7 @@
         <li><b>Fire.</b> Take turns firing a guess at the enemy's code.</li>
         <li><b class="d">Dead</b> is a right digit in the right place. <b class="i">Injured</b> is a right digit in the wrong place. You learn how many, never which.</li>
         <li><b>Crack it.</b> Four dead cracks the code. If the side that fired first cracks it, the other side gets one last stand to draw level.</li>
+        <li><b>Beat the clock.</b> Matches last 5, 10 or 15 minutes, with 30, 45 or 60 seconds a turn. When time runs out the round is finished, then the side closest to cracking wins: most dead, then most injured, then whoever got there in fewer shots.</li>
       </ol>
       <div class="example">
         <p class="eyebrow">Example</p>
@@ -246,7 +247,7 @@
         <p><b class="d">1 dead</b> (the 0) and <b class="i">2 injured</b> (the 1 and the 4).</p>
       </div>
       <p class="eyebrow">Supplies</p>
-      <p class="muted">Win the rock, paper, scissors draw for three crates, lose it for two and the first shot. Spend them from the Supplies tab, one crate a turn:</p>
+      <p class="muted">The match's orders set which supplies are on, how many crates and the time limit. Win the rock, paper, scissors draw for the full count of crates, lose it for one fewer and the first shot (with no supplies on, the winner fires first). One crate a turn:</p>
       <ul class="supplies">
         <li><b>Recon</b> flies a plane over their trench: a green flare if a digit is in their code, red if not.</li>
         <li><b>Sniper</b> takes a shot at one of their four soldiers: a hit proves a digit sits in his spot.</li>

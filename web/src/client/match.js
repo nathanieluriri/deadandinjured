@@ -1,9 +1,14 @@
 import { gsap } from "gsap/gsap-core";
-import { isCode, randomCode } from "../shared/rules.js";
+import { isCode, randomCode, anySupply, STANDARD_ORDERS } from "../shared/rules.js";
 import { TIMES } from "../shared/game.js";
 
 export const TAUNTS = ["Salute", "Fire in the hole!", "Ha ha ha", "Good game", "Come on then", "Boom"];
-const PHASE_MS = { supply: TIMES.supply, deploy: TIMES.deploy, battle: TIMES.turn };
+const PHASE_MS = { supply: TIMES.supply, deploy: TIMES.deploy };
+const mmss = (ms) => {
+  const t = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+};
+const bestText = (b) => (b && b.dead + b.injured ? `${b.dead} dead, ${b.injured} injured` : "nothing hit");
 const $ = (id) => document.getElementById(id);
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const OUT = "cubic-bezier(0.16, 1, 0.3, 1)";
@@ -32,7 +37,7 @@ export class MatchView {
     for (const id of ["note", "turn", "turnLabel", "timer", "meName", "oppName", "meCrates", "oppCrates", "oppDot", "slots", "pad", "fireBtn", "delBtn",
       "mineLog", "theirLog", "logCount", "logs", "logSeg", "overTitle", "overText", "overCodes", "overTag", "rematchBtn", "homeBtn", "leaveBtn",
       "rps", "stamp", "myCode", "taunts", "tauntBtn", "markBtn", "randomBtn", "panes", "switch", "recent", "deck", "deckNote", "deckDots",
-      "crateBadge", "scope", "scopeTag", "say", "reticle", "reticleTag", "leaveDlg", "leaveText", "live"]) this.el[id] = $(id);
+      "crateBadge", "scope", "scopeTag", "say", "reticle", "reticleTag", "leaveDlg", "leaveText", "live", "clock"]) this.el[id] = $(id);
     this.slotEls = [...this.el.slots.children];
     this.keys = new Map([...this.el.pad.querySelectorAll("[data-d]")].map((b) => [b.dataset.d, b]));
     this.active = false;
@@ -228,6 +233,7 @@ export class MatchView {
       case "power": this.enqueue(() => this.playPower(m)); break;
       case "over": this.enqueue(() => this.playOver(m)); break;
       case "laststand": this.enqueue(() => this.playLastStand(m)); break;
+      case "timeup": this.enqueue(() => this.playTimeUp(m)); break;
       case "restart": this.enqueue(() => this.restart()); break;
       case "assigned": this.enqueue(() => this.app.toast(`Out of time: HQ assigned your code, ${m.code}`)); break;
       case "picked": this.sfx.play("click"); this.note(`<b>${this.oppName}</b> has picked`); break;
@@ -327,7 +333,7 @@ export class MatchView {
       for (const b of this.el.rps.querySelectorAll("button")) b.classList.remove("picked");
       await this.dir.shot("supply", prev ? 1.2 : 0.01);
       this.banner("Supply draw");
-      this.note(`<b>Rock, paper or scissors.</b> The winner takes 3 crates, the loser 2 and the first shot.`);
+      this.note(this.drawNote(s));
     } else if (phase === "deploy") {
       this.dir.rpsShow(false);
       this.input = s.me.secret || "";
@@ -361,6 +367,16 @@ export class MatchView {
       this.dir.setCode(s.me.secret || "", { sound: false });
       this.dir.shot("far", 0.01);
     }
+  }
+
+  // What the draw is for: crates and the first shot, or with no supplies just the first shot. In a
+  // quick match it also decides whose orders stand.
+  drawNote(s) {
+    const o = s.orders || (s.offers ? null : STANDARD_ORDERS);
+    if (!o) return "<b>Rock, paper or scissors.</b> The winner's orders stand.";
+    if (!anySupply(o)) return "<b>Rock, paper or scissors.</b> No supplies in this match: the winner fires first.";
+    const n = o.crates;
+    return `<b>Rock, paper or scissors.</b> The winner takes ${plural(n, "crate")}, the loser ${n - 1} and the first shot.`;
   }
 
   note(html, ms = 4800) {
@@ -399,13 +415,23 @@ export class MatchView {
       this.stamp("Draw", "throw again", true);
       this.note("<b>A draw.</b> Throw again.");
       for (const b of this.el.rps.querySelectorAll("button")) b.classList.remove("picked");
-    } else if (m.result === "win") {
-      this.stamp("3 crates", "won the draw", true);
-      this.sfx.play("yes");
-      this.note(`You take <b>3 crates</b>. ${this.oppName} gets 2 and fires first.`);
     } else {
-      this.stamp("2 crates", "and the first shot", true);
-      this.note(`${this.oppName} takes 3 crates. You get <b>2 and the first shot</b>.`);
+      const won = m.result === "win";
+      const stood = m.stand === "me" ? "Your orders stand. " : m.stand === "opp" ? `${this.oppName}'s orders stand. ` : "";
+      const armed = anySupply(m.orders);
+      const mine = m.supplies?.me ?? 0;
+      const theirs = m.supplies?.opp ?? 0;
+      if (won) this.sfx.play("yes");
+      if (!armed) {
+        this.stamp(won ? "First shot" : "Second shot", won ? "won the draw" : "lost the draw", true);
+        this.note(`${stood}No supplies in this match. ${won ? "<b>You fire first.</b>" : `${this.oppName} fires first.`}`);
+      } else if (won) {
+        this.stamp(plural(mine, "crate"), "won the draw", true);
+        this.note(`${stood}You take <b>${plural(mine, "crate")}</b>. ${this.oppName} gets ${theirs} and fires first.`);
+      } else {
+        this.stamp(plural(mine, "crate"), "and the first shot", true);
+        this.note(`${stood}${this.oppName} takes ${plural(theirs, "crate")}. You get <b>${mine} and the first shot</b>.`);
+      }
     }
     await wait(1.2);
     this.animating--;
@@ -501,6 +527,13 @@ export class MatchView {
     await wait(2.2);
   }
 
+  async playTimeUp(m) {
+    this.stamp("Time", m.by === "me" ? "your shot closes the round" : "their shot closes the round");
+    this.sfx.play("siren");
+    this.note(m.by === "me" ? "<b>Time is up.</b> Your shot closes the round, then the closest to cracking wins." : `<b>Time is up.</b> ${this.oppName}'s shot closes the round, then the closest to cracking wins.`, 5200);
+    await wait(1.8);
+  }
+
   async playOver(r) {
     this.animating++;
     this.refresh();
@@ -509,7 +542,7 @@ export class MatchView {
     const cue = r.winner === "me" ? "fanfare" : r.winner === "opp" ? "taps" : r.winner === "draw" ? "horn" : null;
     if (cue) wait(0.6).then(() => this.sfx.play(cue));
     await this.dir.ending(r);
-    if (this.solo && (r.winner === "me" || r.winner === "opp")) this.app.recordSolo(r.winner === "me" ? "win" : "loss");
+    if (this.solo && ["me", "opp", "draw"].includes(r.winner)) this.app.recordSolo({ me: "win", opp: "loss", draw: "draw" }[r.winner]);
     this.animating--;
     this.app.refreshMe();
   }
@@ -519,11 +552,11 @@ export class MatchView {
     const s = this.s;
     const opp = this.oppName;
     const titles = {
-      me: { cracked: `You cracked ${opp}'s code.`, left: `${opp} left the field.`, timeout: `${opp} ran out the clock.` },
-      opp: { cracked: `${opp} cracked your code.`, left: "You left the field.", timeout: "You ran out the clock." },
+      me: { cracked: `You cracked ${opp}'s code.`, left: `${opp} left the field.`, timeout: `${opp} misfired three times.`, time: "Time. You came closest to cracking it." },
+      opp: { cracked: `${opp} cracked your code.`, left: "You left the field.", timeout: "You misfired three times.", time: `Time. ${opp} came closest to cracking it.` },
     };
     e.overTag.textContent = r.winner === "me" ? "victory" : r.winner === "opp" ? "defeat" : r.winner === "draw" ? "draw" : "closed";
-    if (r.winner === "draw") e.overTitle.textContent = "Both codes fell in the same round.";
+    if (r.winner === "draw") e.overTitle.textContent = r.reason === "time" ? "Time. Neither side came closer." : "Both codes fell in the same round.";
     else if (r.winner === "none") e.overTitle.textContent = r.reason === "noshow" ? "Your opponent never arrived." : "The room closed.";
     else e.overTitle.textContent = titles[r.winner]?.[r.reason] || "The war is over.";
     const volleys = s?.volleys || [];
@@ -531,9 +564,13 @@ export class MatchView {
     const kills = volleys.filter((v) => v.by === "me").reduce((a, v) => a + (v.dead || 0), 0);
     const lost = volleys.filter((v) => v.by === "opp").reduce((a, v) => a + (v.dead || 0), 0);
     e.overText.textContent = r.winner === "none" ? "" : `${plural(fired, "volley")} fired, ${plural(kills, "enemy soldier")} down, ${lost} of yours lost.`;
+    if (r.reason === "time" && r.best) {
+      const verdict = r.winner === "me" ? "You win on the clock." : r.winner === "opp" ? `${opp} wins on the clock.` : "A stalemate on the clock.";
+      e.overText.textContent = `Your best volley: ${bestText(r.best.me)}. ${opp}'s best: ${bestText(r.best.opp)}. ${verdict}`;
+    }
     const tiles = (code, cls) => `<span class="tiles ${cls}">${(code || "????").split("").map((c) => `<i>${c}</i>`).join("")}</span>`;
     e.overCodes.innerHTML = `<div><span class="eyebrow">Your code</span>${tiles(r.codes?.me, "")}</div><div><span class="eyebrow">${opp}'s code</span>${tiles(r.codes?.opp, "opp")}</div>`;
-    const canRematch = this.solo || ["cracked", "timeout"].includes(r.reason);
+    const canRematch = this.solo || ["cracked", "timeout", "time"].includes(r.reason);
     e.rematchBtn.hidden = !canRematch;
     if (!s?.rematch?.me) {
       e.rematchBtn.disabled = false;
@@ -914,8 +951,10 @@ export class MatchView {
       e.fireBtn.disabled = busy || !my || !isCode(this.input) || this.firing;
     }
     const why = !my ? "Supplies go out on your turn" : s.me.supplies < 1 ? "No crates left" : s.me.powerUsed || this.powerSent ? "One crate a turn" : "";
+    const rules = s.orders || STANDARD_ORDERS;
     for (const card of e.deck.children) {
       const kind = card.dataset.power;
+      card.hidden = !rules[kind];
       const ok = this.canPower(kind);
       const sel = this.sel[kind] || {};
       const ready = ok && (kind === "smoke" || (sel.digit != null && (kind !== "sniper" || sel.pos != null)));
@@ -981,7 +1020,22 @@ export class MatchView {
     e.theirLog.scrollTop = e.theirLog.scrollHeight;
   }
 
+  // The match clock: minutes left in the battle, frozen while a match against the computer is paused.
+  matchClock() {
+    const s = this.s;
+    const c = this.el.clock;
+    const on = this.active && s?.phase === "battle" && s.clock != null;
+    if (c.hidden === on) c.hidden = !on;
+    if (!on) return;
+    const now = this.conn?.paused ? this.conn.pausedAt : Date.now() + this.offset;
+    const left = Math.min(s.clock - now, (s.orders || STANDARD_ORDERS).minutes * 60e3);
+    const text = s.timeUp || left <= 0 ? "Time" : mmss(left);
+    if (c.textContent !== text) c.textContent = text;
+    c.classList.toggle("low", !s.timeUp && left < 60e3);
+  }
+
   clock() {
+    this.matchClock();
     const s = this.s;
     const t = this.el.timer;
     if (this.active && s?.phase === "battle" && s.turn === "me" && !this.animating && !this.firing && this.idleAt && performance.now() - this.idleAt > 11000) {
@@ -990,11 +1044,11 @@ export class MatchView {
       this.el.turn.classList.add("nudge");
       this.note(this.input.length === 4 ? "<b>Four digits aimed.</b> Hit Fire when you are ready." : "<b>Your shot.</b> Aim four digits, or spend a crate from Supplies.", 4200);
     }
-    if (!this.active || !s || !s.deadline || !PHASE_MS[s.phase] || this.animating) {
+    const total = s?.phase === "battle" ? s.turnMs : PHASE_MS[s?.phase];
+    if (!this.active || !s || !s.deadline || !total || this.animating) {
       if (!t.hidden) t.hidden = true;
       return;
     }
-    const total = PHASE_MS[s.phase];
     const left = s.deadline - (Date.now() + this.offset);
     if (left > total + 50) {
       if (!t.hidden) t.hidden = true;

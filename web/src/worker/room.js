@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { newGame, join, act, tick, view, TIMES } from "../shared/game.js";
+import { newGame, join, act, tick, view, nextWake, rulesOf, TIMES } from "../shared/game.js";
 
 const IDLE = 30 * 60e3;
 const AFTER = 10 * 60e3;
@@ -12,10 +12,12 @@ export class Room extends DurableObject {
     super(ctx, env);
     this.g = undefined;
     this.rate = new Map();
-    // Local filming only: frame-exact capture runs far slower than real time.
+    // Local only: filming runs far slower than real time (a scale above 1); the clock test runs
+    // matches far faster (below 1).
     const scale = Number(env.TIME_SCALE);
-    if (scale > 1 && !TIMES.scaled) {
-      for (const k of ["lobby", "supply", "deploy", "turn"]) TIMES[k] *= scale;
+    if (scale > 0 && scale !== 1 && !TIMES.scaled) {
+      for (const k of ["lobby", "supply", "deploy"]) TIMES[k] *= scale;
+      TIMES.scale = scale;
       TIMES.scaled = true;
     }
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"t":"ping"}', '{"t":"pong"}'));
@@ -29,15 +31,15 @@ export class Room extends DurableObject {
   async save() {
     const g = this.g;
     await this.ctx.storage.put("g", g);
-    const at = Math.min(g.deadline ?? Infinity, g.expires ?? Infinity);
+    const at = Math.min(nextWake(g) ?? Infinity, g.expires ?? Infinity);
     if (Number.isFinite(at)) await this.ctx.storage.setAlarm(at);
   }
 
-  async init({ code, host, guest = null }) {
+  async init({ code, host, guest = null, orders = null, offers = null }) {
     await this.load();
     if (this.g) return { ok: false };
     const now = Date.now();
-    this.g = newGame({ code, host, guest, now });
+    this.g = newGame({ code, host, guest, now, orders, offers });
     this.g.expires = now + IDLE;
     await this.save();
     return { ok: true };
@@ -47,7 +49,7 @@ export class Room extends DurableObject {
     await this.load();
     const g = this.g;
     if (!g) return null;
-    return { phase: g.phase, host: g.p[0].name, open: g.phase === "lobby" && !g.p[1] };
+    return { phase: g.phase, host: g.p[0].name, open: g.phase === "lobby" && !g.p[1], orders: rulesOf(g) };
   }
 
   sockets(seat, except) {
@@ -174,7 +176,7 @@ export class Room extends DurableObject {
       kills[v.by] += v.dead || 0;
     }
     const winner = res.winner === -1 ? null : g.p[res.winner].id;
-    const log = JSON.stringify({ codes: g.p.map((p) => p.secret), volleys: g.volleys, powers: g.powers });
+    const log = JSON.stringify({ codes: g.p.map((p) => p.secret), volleys: g.volleys, powers: g.powers, orders: g.orders, offers: g.offers, best: res.best || null });
     const db = this.env.DB;
     const stmts = [
       db.prepare("INSERT OR IGNORE INTO matches (id, room, p1, p2, winner, reason, volleys, started_at, ended_at, log) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)")

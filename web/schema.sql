@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS players (
   kills INTEGER NOT NULL DEFAULT 0,
   best INTEGER,
   solo_wins INTEGER NOT NULL DEFAULT 0,
-  solo_losses INTEGER NOT NULL DEFAULT 0
+  solo_losses INTEGER NOT NULL DEFAULT 0,
+  solo_draws INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS players_rank ON players (wins DESC, losses ASC);

@@ -53,13 +53,19 @@ export class Commander {
     return list[Math.floor(this.rng() * list.length)];
   }
 
-  // Which supply to spend this turn, if any. `threat` is the best dead count the player has scored.
-  choosePower(supplies, threat, turn) {
+  // Which supply to spend this turn, if any. `threat` is the best dead count the player has
+  // scored; `allowed` is the match's supply switches.
+  choosePower(supplies, threat, turn, allowed = { recon: true, sniper: true, smoke: true }) {
+    const p = this.pickPower(supplies, threat, turn, allowed);
+    return p && allowed[p.kind] ? p : null;
+  }
+
+  pickPower(supplies, threat, turn, allowed) {
     if (supplies < 1 || this.cands.length <= 1) return null;
     if (this.level === "recruit") return turn >= 3 && this.rng() < 0.25 ? { kind: "smoke" } : null;
-    if (threat >= 3 || (threat >= 2 && this.level === "general" && this.rng() < 0.5)) return { kind: "smoke" };
+    if (allowed.smoke && (threat >= 3 || (threat >= 2 && this.level === "general" && this.rng() < 0.5))) return { kind: "smoke" };
     if (this.level === "sergeant" && (turn < 2 || this.rng() < 0.55)) return null;
-    if (this.cands.length > 12) {
+    if (this.cands.length > 12 && allowed.recon) {
       let best = null;
       let bestGap = Infinity;
       for (const d of "0123456789") {
@@ -69,7 +75,7 @@ export class Commander {
       }
       return { kind: "recon", digit: best };
     }
-    if (this.level === "general" && this.cands.length > 2) {
+    if (this.level === "general" && this.cands.length > 2 && allowed.sniper) {
       let best = null;
       let bestGap = Infinity;
       for (let pos = 0; pos < 4; pos++) {

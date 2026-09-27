@@ -1,27 +1,39 @@
 // The match engine. Pure functions over a plain JSON state, shared by the Room Durable Object
 // (live matches) and the browser (matches against the computer). Every function that changes
 // the state returns a list of [seat, event] pairs for the caller to deliver.
-import { isCode, score, rps, randomCode, RPS, POWERS, SUPPLIES } from "./rules.js";
+import { isCode, score, rps, randomCode, RPS, POWERS, POWER_NAMES, STANDARD_ORDERS, TURN_SECONDS, cleanOrders, anySupply } from "./rules.js";
 
 export const TIMES = {
   lobby: 3 * 60e3,
   supply: 30e3,
   deploy: 75e3,
-  turn: 60e3,
   graceRps: 4200,
   graceBattle: 2500,
   graceVolley: 5600,
+  powerFloor: 20e3,
   maxTimeouts: 3,
+  scale: 1,
 };
+
+// Before a quick match's draw nobody's orders apply yet; rooms saved before orders existed
+// play by the standard ones.
+export const rulesOf = (g) => g.orders || STANDARD_ORDERS;
+export const turnMs = (g) => TURN_SECONDS[rulesOf(g).minutes] * 1000 * TIMES.scale;
+export const clockMs = (g) => rulesOf(g).minutes * 60e3 * TIMES.scale;
 
 const seatOf = (u) => ({
   id: u.id, name: u.name, joined: false, pick: null, secret: null,
   supplies: 0, powerAt: -1, smoke: false, timeouts: 0,
 });
 
-export function newGame({ code, host, guest = null, now, timers = true }) {
+// `orders` are the rules of a friend room or a match against the computer (the host's); a quick
+// match brings `offers`, one set per seat, and the supply draw decides whose stand.
+export function newGame({ code, host, guest = null, now, timers = true, orders = null, offers = null }) {
   return {
     code, created: now, timers,
+    orders: offers ? null : cleanOrders(orders),
+    offers: offers ? [cleanOrders(offers[0]), cleanOrders(offers[1])] : null,
+    stand: null, clockEnd: null, timeUp: false,
     p: [seatOf(host), guest ? seatOf(guest) : null],
     phase: "lobby",
     rpsRound: 0,
@@ -68,14 +80,23 @@ function resolveRps(g, now, ev) {
     return;
   }
   const w = r === 1 ? 0 : 1;
-  g.p[w].supplies = SUPPLIES.win;
-  g.p[1 - w].supplies = SUPPLIES.lose;
-  g.first = 1 - w;
+  if (g.offers) {
+    g.orders = { ...g.offers[w] };
+    g.stand = w;
+  }
+  // The winner takes the crates in the orders, the loser one fewer and the first shot. With every
+  // supply off there are no crates, and the first shot is the prize.
+  const o = rulesOf(g);
+  const armed = anySupply(o);
+  g.p[w].supplies = armed ? o.crates : 0;
+  g.p[1 - w].supplies = armed ? o.crates - 1 : 0;
+  g.first = armed ? 1 - w : w;
   g.turn = g.first;
   for (const s of [0, 1]) {
     ev.push([s, {
       t: "rps", me: g.p[s].pick, opp: g.p[1 - s].pick, result: s === w ? "win" : "lose",
       supplies: { me: g.p[s].supplies, opp: g.p[1 - s].supplies }, first: g.first === s ? "me" : "opp",
+      orders: { ...o }, stand: g.offers ? (w === s ? "me" : "opp") : null,
     }]);
   }
   g.phase = "deploy";
@@ -88,7 +109,9 @@ function startBattle(g, now, ev) {
   g.round = 1;
   g.lastStand = false;
   g.started = now;
-  g.deadline = later(g, now, TIMES.graceBattle + TIMES.turn);
+  g.clockEnd = now + TIMES.graceBattle + clockMs(g);
+  g.timeUp = false;
+  g.deadline = later(g, now, TIMES.graceBattle + turnMs(g));
   for (const s of [0, 1]) ev.push([s, { t: "battle", first: g.first === s ? "me" : "opp" }]);
 }
 
@@ -101,16 +124,50 @@ function volleyView(v, s) {
 
 function resultView(g, s) {
   const w = g.result.winner;
-  return {
+  const r = {
     winner: w === -1 ? "draw" : w == null ? "none" : w === s ? "me" : "opp",
     reason: g.result.reason,
     codes: { me: g.p[s]?.secret || null, opp: g.p[1 - s]?.secret || null },
   };
+  if (g.result.best) r.best = { me: g.result.best[s], opp: g.result.best[1 - s] };
+  return r;
 }
 
-function finish(g, winner, reason, now, ev) {
+// Each side's best volley by its true score (smoke hides it from the shooter, not from the
+// server) and the shot on which it was first reached.
+export function bestVolleys(g) {
+  return [0, 1].map((s) => {
+    let best = { dead: 0, injured: 0, shot: 0 };
+    let n = 0;
+    for (const v of g.volleys) {
+      if (v.by !== s) continue;
+      n++;
+      if (v.miss) continue;
+      if (v.dead > best.dead || (v.dead === best.dead && v.injured > best.injured)) best = { dead: v.dead, injured: v.injured, shot: n };
+    }
+    return best;
+  });
+}
+
+// Time is up: the side closest to cracking wins. More dead, then more injured, then whoever
+// got there in fewer shots; nothing hit on either side, or a dead heat, is a stalemate.
+export function closest(g) {
+  const [a, b] = bestVolleys(g);
+  let winner = -1;
+  if (a.dead !== b.dead) winner = a.dead > b.dead ? 0 : 1;
+  else if (a.injured !== b.injured) winner = a.injured > b.injured ? 0 : 1;
+  else if (a.dead + a.injured > 0 && a.shot !== b.shot) winner = a.shot < b.shot ? 0 : 1;
+  return { winner, best: [a, b] };
+}
+
+function finishTime(g, now, ev) {
+  const { winner, best } = closest(g);
+  finish(g, winner, "time", now, ev, { best });
+}
+
+function finish(g, winner, reason, now, ev, extra = null) {
   g.phase = "over";
-  g.result = { winner, reason, at: now };
+  g.result = { winner, reason, at: now, ...extra };
   g.deadline = null;
   for (const s of [0, 1]) ev.push([s, { t: "over", ...resultView(g, s) }]);
 }
@@ -134,17 +191,19 @@ function volley(g, s, guess, now, ev) {
   if (cracked && s === g.first) {
     g.lastStand = true;
     g.turn = o;
-    g.deadline = later(g, now, TIMES.graceVolley + TIMES.turn);
+    g.deadline = later(g, now, TIMES.graceVolley + turnMs(g));
     for (const x of [0, 1]) ev.push([x, { t: "laststand", by: x === s ? "me" : "opp" }]);
     return;
   }
   if (cracked) return finish(g, g.lastStand ? -1 : s, "cracked", now, ev);
   if (s !== g.first) {
     if (g.lastStand) return finish(g, g.first, "cracked", now, ev);
+    // The second shot of a round closes it; if the clock ran out meanwhile, the match ends here.
+    if (g.timeUp || (g.clockEnd != null && now >= g.clockEnd)) return finishTime(g, now, ev);
     g.round++;
   }
   g.turn = o;
-  g.deadline = later(g, now, TIMES.graceVolley + TIMES.turn);
+  g.deadline = later(g, now, TIMES.graceVolley + turnMs(g));
 }
 
 function reset(g, now, ev) {
@@ -152,7 +211,13 @@ function reset(g, now, ev) {
   Object.assign(g, {
     rpsRound: 0, first: 0, turn: 0, round: 1, lastStand: false, volleys: [], powers: [],
     result: null, rematch: [false, false], match: g.match + 1, started: null, recorded: false,
+    clockEnd: null, timeUp: false,
   });
+  // A quick match rematch goes back to the draw with each side's own orders.
+  if (g.offers) {
+    g.orders = null;
+    g.stand = null;
+  }
   for (const s of [0, 1]) ev.push([s, { t: "restart" }]);
   startSupply(g, now, ev);
 }
@@ -185,7 +250,8 @@ export function act(g, s, msg, now, rng = Math.random) {
     case "power": {
       if (g.phase !== "battle" || g.turn !== s) return err("Not your turn");
       if (!POWERS.includes(msg.kind)) return err("Unknown supply");
-      if (me.supplies < 1) return err("No supplies left");
+      if (!rulesOf(g)[msg.kind]) return err(`${POWER_NAMES[msg.kind]} is off in this match`);
+      if (me.supplies < 1) return err("No crates left");
       if (me.powerAt === g.volleys.length) return err("One supply per turn");
       let args = null;
       let result = true;
@@ -209,7 +275,7 @@ export function act(g, s, msg, now, rng = Math.random) {
       g.powers.push({ by: s, kind: msg.kind, args, result, at: g.volleys.length });
       ev.push([s, { t: "power", by: "me", kind: msg.kind, args, result }]);
       ev.push([o, { t: "power", by: "opp", kind: msg.kind }]);
-      if (g.timers) g.deadline = Math.max(g.deadline, now + 20e3);
+      if (g.timers) g.deadline = Math.max(g.deadline, now + TIMES.powerFloor);
       return { events: ev };
     }
     case "fire": {
@@ -221,7 +287,8 @@ export function act(g, s, msg, now, rng = Math.random) {
     }
     case "rematch": {
       if (g.phase !== "over") return err("Not now");
-      if (!opp || !["cracked", "timeout", "left"].includes(g.result.reason)) return err("No rematch for this one");
+      if (!opp || !["cracked", "timeout", "left", "time"].includes(g.result.reason)) return err("No rematch for this one");
+      if (g.offers && msg.orders) g.offers[s] = cleanOrders(msg.orders);
       g.rematch[s] = true;
       ev.push([o, { t: "rematch" }]);
       if (g.rematch[0] && g.rematch[1]) reset(g, now, ev);
@@ -239,9 +306,19 @@ export function act(g, s, msg, now, rng = Math.random) {
 }
 
 // Deadlines: an unpicked hand is drawn at random, an undeployed code is assigned, a turn left
-// too long is a misfire, and a player who misfires three times in a row forfeits.
+// too long is a misfire, and a player who misfires three times in a row forfeits. The match
+// clock runs even without turn timers; when it runs out at the start of a round the match ends,
+// otherwise the round (or a last stand) is played out first.
 export function tick(g, now, rng = Math.random) {
   const ev = [];
+  if (g.phase === "battle" && g.clockEnd != null && now >= g.clockEnd && !g.timeUp) {
+    g.timeUp = true;
+    if (g.turn === g.first && !g.lastStand) {
+      finishTime(g, now, ev);
+      return ev;
+    }
+    for (const s of [0, 1]) ev.push([s, { t: "timeup", by: g.turn === s ? "me" : "opp" }]);
+  }
   if (!g.timers || g.deadline == null || now < g.deadline) return ev;
   if (g.phase === "lobby") finish(g, null, "noshow", now, ev);
   else if (g.phase === "supply") {
@@ -263,12 +340,28 @@ export function tick(g, now, rng = Math.random) {
   return ev;
 }
 
+// Moves every running clock on by `ms`: a match against the computer stands still while paused.
+export function shiftClocks(g, ms) {
+  if (g.clockEnd != null) g.clockEnd += ms;
+  if (g.deadline != null) g.deadline += ms;
+}
+
+// The earliest moment tick() has work to do, for the room's alarm.
+export function nextWake(g) {
+  const at = [g.timers ? g.deadline : null, g.phase === "battle" && !g.timeUp ? g.clockEnd : null].filter((x) => x != null);
+  return at.length ? Math.min(...at) : null;
+}
+
 export function view(g, s, now) {
   const me = g.p[s];
   const opp = g.p[1 - s];
   return {
     t: "state",
     code: g.code, phase: g.phase, now, deadline: g.deadline, match: g.match,
+    orders: g.orders ? { ...g.orders } : null,
+    offers: g.offers ? { me: { ...g.offers[s] }, opp: { ...g.offers[1 - s] } } : null,
+    stand: g.stand == null ? null : g.stand === s ? "me" : "opp",
+    clock: g.clockEnd ?? null, timeUp: !!g.timeUp, turnMs: turnMs(g),
     me: {
       name: me.name, supplies: me.supplies, secret: me.secret, pick: me.pick, smoke: me.smoke,
       powerUsed: me.powerAt === g.volleys.length,

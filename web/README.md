@@ -6,6 +6,8 @@ Each side hides a code of four different digits and fires guesses at the other's
 
 What carries over from the original: callsigns with optional passwords, create and join by code, the rock, paper, scissors draw for power ups (now three supplies: recon, sniper and smoke) and a computer opponent at three ranks. New: quick match, a leaderboard, a last stand for the side that fired second, turn timers, reconnects and rematches.
 
+Every match is played under a set of **orders**: which supplies are on, how many crates (1 to 5) and a time limit of 5, 10 or 15 minutes, with 30, 45 or 60 seconds a turn. The winner of the draw takes the crates, the loser one fewer and the first shot (with every supply off, the winner fires first). When the clock runs out the round is finished, then the side closest to cracking wins: most dead, then most injured, then fewer shots. A friend room plays by the host's orders; in quick match each side brings their own and the winner of the draw has theirs stand. A draw against the computer on the clock counts as a solo draw.
+
 ## How it is built
 
 | Part | What it does |
@@ -35,7 +37,7 @@ npx wrangler d1 execute dead-and-injured --local --file schema.sql
 npm run dev
 ```
 
-`npm test` runs the rules, engine and computer tests. With `wrangler dev` running, `node test/e2e.mjs` plays a full live match between two browsers and `node test/quick.mjs` checks quick match and signing in (both need `NODE_PATH=$(npm root -g)` for Playwright).
+`npm test` runs the rules, engine and computer tests. With `wrangler dev` running, `node test/api.mjs` checks the rooms, the lobby and the API without a browser, `node test/e2e.mjs` plays a full live match between two browsers and `node test/quick.mjs` checks quick match and signing in (the browser tests need `NODE_PATH=$(npm root -g)` for Playwright). `node test/api.mjs --clock` checks that a room ends itself when the match clock runs out; run it against `wrangler dev --var TIME_SCALE:0.05`, where five minutes pass in fifteen seconds.
 
 ## Models
 

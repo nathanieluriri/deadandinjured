@@ -195,6 +195,8 @@ body[data-screen="menu"] #menu, body[data-screen="wait"] #wait, body[data-screen
 .timer i { display: block; height: 100%; width: 100%; background: var(--fg-2); transform-origin: left; }
 .timer.low i { background: var(--dead); }
 .timer[hidden] { display: none; }
+.clock { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: 0.06em; color: var(--fg-2); }
+.clock.low { color: var(--inj); }
 .note { position: absolute; top: calc(var(--pad) + var(--top) + 100px); left: 50%; transform: translate(-50%, -6px); width: max-content; max-width: calc(100vw - 2 * var(--pad)); margin: 0; padding: 8px 14px; border-radius: var(--r-md); background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); text-align: center; font-size: var(--fs-sm); color: var(--fg-2); pointer-events: none; opacity: 0; transition: opacity 0.5s var(--ease), transform 0.5s var(--out); }
 .note.on { opacity: 1; transform: translate(-50%, 0); }
 .note:empty { display: none; }

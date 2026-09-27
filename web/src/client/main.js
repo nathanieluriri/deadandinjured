@@ -8,7 +8,7 @@ import { LogoHud } from "./scene/logo.js";
 import { Sfx } from "./audio.js";
 import { MatchView } from "./match.js";
 import { RemoteMatch, LocalMatch, quickMatch } from "./net.js";
-import { ROOM_RE } from "../shared/rules.js";
+import { ROOM_RE, STANDARD_ORDERS, cleanOrders } from "../shared/rules.js";
 import { LEVELS } from "./ai.js";
 
 const $ = (id) => document.getElementById(id);
@@ -38,11 +38,28 @@ function grain() {
   document.querySelector(".grain").style.backgroundImage = `url(${c.toDataURL("image/png")})`;
 }
 
+const store = (k, v) => {
+  try {
+    if (v === undefined) return localStorage.getItem(k);
+    localStorage.setItem(k, v);
+  } catch {}
+  return null;
+};
+
 class App {
   constructor() {
     this.me = null;
     this.screen = "pre";
     this.match = null;
+    let saved = null;
+    try { saved = JSON.parse(store("di.orders") || "null"); } catch {}
+    this.orders = cleanOrders(saved || STANDARD_ORDERS);
+  }
+
+  setOrders(o) {
+    this.orders = cleanOrders(o);
+    store("di.orders", JSON.stringify(this.orders));
+    this.lobby?.setOrders(this.orders);
   }
 
   progress(f) {
@@ -382,14 +399,14 @@ class App {
     this.director.titleOut();
     const view = this.view;
     view.start(null, { solo: true, level });
-    view.conn = new LocalMatch(level, name, (m) => view.message(m));
+    view.conn = new LocalMatch(level, name, (m) => view.message(m), this.orders);
     this.toast(`${LEVELS[level].name}: ${LEVELS[level].note.toLowerCase()}`);
   }
 
   async create() {
     if (!(await this.needCallsign())) return;
     try {
-      const { code } = await api("/api/rooms", {});
+      const { code } = await api("/api/rooms", { orders: this.orders });
       this.openRoom(code, true);
     } catch (err) {
       this.toast(err.message);
@@ -466,6 +483,7 @@ class App {
     $("searchText").textContent = "Scanning for an opponent";
     $("searchState").textContent = "scanning";
     this.lobby = quickMatch({
+      orders: STANDARD_ORDERS,
       onQueue: (n) => {
         $("searchText").textContent = n > 1 ? `${n} soldiers on the radio` : "Scanning for an opponent";
       },

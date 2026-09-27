@@ -1,7 +1,7 @@
 import { Room } from "./room.js";
 import { Lobby } from "./lobby.js";
 import { currentPlayer, startSession, endSession, cookieFor, enlist, login, hashPassword, publicPlayer } from "./auth.js";
-import { roomCode, ROOM_RE } from "../shared/rules.js";
+import { roomCode, ROOM_RE, cleanOrders } from "../shared/rules.js";
 
 export { Room, Lobby };
 
@@ -66,10 +66,11 @@ async function api(req, env, url) {
   if (path === "/api/rooms" && req.method === "POST") {
     const me = await currentPlayer(req, env);
     if (!me) return json({ error: "Pick a callsign first" }, 401);
+    const orders = cleanOrders((await body(req)).orders);
     for (let i = 0; i < 6; i++) {
       const code = roomCode();
       const room = env.ROOMS.get(env.ROOMS.idFromName(code));
-      if ((await room.init({ code, host: { id: me.id, name: me.name } })).ok) return json({ code }, 201);
+      if ((await room.init({ code, host: { id: me.id, name: me.name }, orders })).ok) return json({ code, orders }, 201);
     }
     return json({ error: "Could not open a room, try again" }, 503);
   }
@@ -84,8 +85,9 @@ async function api(req, env, url) {
   if (path === "/api/solo" && req.method === "POST") {
     const me = await currentPlayer(req, env);
     if (!me) return json({ ok: false });
-    const won = (await body(req)).result === "win";
-    await env.DB.prepare(`UPDATE players SET ${won ? "solo_wins = solo_wins" : "solo_losses = solo_losses"} + 1 WHERE id = ?1`).bind(me.id).run();
+    const col = { win: "solo_wins", loss: "solo_losses", draw: "solo_draws" }[(await body(req)).result];
+    if (!col) return json({ error: "Win, loss or draw" }, 400);
+    await env.DB.prepare(`UPDATE players SET ${col} = ${col} + 1 WHERE id = ?1`).bind(me.id).run();
     return json({ ok: true });
   }
 

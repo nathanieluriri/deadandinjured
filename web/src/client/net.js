@@ -1,6 +1,6 @@
-import { newGame, join, act, view } from "../shared/game.js";
+import { newGame, join, act, tick, view, shiftClocks, rulesOf } from "../shared/game.js";
 import { Commander, LEVELS } from "./ai.js";
-import { randomCode, RPS } from "../shared/rules.js";
+import { randomCode, RPS, packOrders, cleanOrders } from "../shared/rules.js";
 
 const wsUrl = (path) => `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${path}`;
 
@@ -60,8 +60,10 @@ export class RemoteMatch {
   }
 }
 
-export function quickMatch({ onQueue, onMatched, onFail }) {
-  const ws = new WebSocket(wsUrl("/ws/lobby"));
+// Quick match: the orders ride on the socket's URL, so they are known the moment it opens,
+// and can be changed until the radio finds someone.
+export function quickMatch({ orders, onQueue, onMatched, onFail }) {
+  const ws = new WebSocket(wsUrl(`/ws/lobby?o=${packOrders(orders)}`));
   let done = false;
   const ping = setInterval(() => ws.readyState === 1 && ws.send('{"t":"ping"}'), 20000);
   ws.onmessage = (e) => {
@@ -78,6 +80,9 @@ export function quickMatch({ onQueue, onMatched, onFail }) {
     if (!done) onFail();
   };
   return {
+    setOrders(o) {
+      if (ws.readyState === 1) ws.send(JSON.stringify({ t: "orders", orders: cleanOrders(o) }));
+    },
     cancel() {
       done = true;
       clearInterval(ping);
@@ -86,15 +91,18 @@ export function quickMatch({ onQueue, onMatched, onFail }) {
   };
 }
 
-// A match against the computer: the same engine the rooms run, played out in the page.
+// A match against the computer: the same engine the rooms run, played out in the page. Turns
+// are untimed, but the match clock runs; pausing stops the clock and the computer's thinking.
 export class LocalMatch {
-  constructor(level, name, onMessage) {
+  constructor(level, name, onMessage, orders = null) {
     this.onMessage = onMessage;
     this.level = level;
     this.ai = new Commander(level);
-    this.timers = new Set();
+    this.timers = new Map();
+    this.pausedAt = null;
     const now = Date.now();
-    this.g = newGame({ code: "SOLO", host: { id: "me", name }, guest: { id: "cpu", name: LEVELS[level].name }, now, timers: false });
+    this.g = newGame({ code: "SOLO", host: { id: "me", name }, guest: { id: "cpu", name: LEVELS[level].name }, now, timers: false, orders });
+    this.clock = setInterval(() => this.tick(), 250);
     join(this.g, "me", name, now);
     const r = join(this.g, "cpu", LEVELS[level].name, now);
     this.turns = 0;
@@ -106,11 +114,45 @@ export class LocalMatch {
   }
 
   later(ms, fn) {
-    const id = setTimeout(() => {
-      this.timers.delete(id);
+    const job = { fn, at: Date.now() + ms, id: 0 };
+    const run = () => {
+      this.timers.delete(job);
       if (!this.closed) fn();
-    }, ms);
-    this.timers.add(id);
+    };
+    job.run = run;
+    this.timers.set(job, true);
+    if (this.pausedAt == null) job.id = setTimeout(run, ms);
+  }
+
+  get paused() {
+    return this.pausedAt != null;
+  }
+
+  pause() {
+    if (this.paused || this.closed) return;
+    this.pausedAt = Date.now();
+    for (const job of this.timers.keys()) clearTimeout(job.id);
+  }
+
+  resume() {
+    if (!this.paused) return;
+    const gone = Date.now() - this.pausedAt;
+    this.pausedAt = null;
+    shiftClocks(this.g, gone);
+    for (const job of this.timers.keys()) {
+      job.at += gone;
+      job.id = setTimeout(job.run, Math.max(0, job.at - Date.now()));
+    }
+    this.onMessage(view(this.g, 0, Date.now()));
+  }
+
+  tick() {
+    if (this.closed || this.paused) return;
+    const ev = tick(this.g, Date.now());
+    if (ev.length) {
+      this.deliver(ev);
+      this.think();
+    }
   }
 
   deliver(events) {
@@ -127,18 +169,20 @@ export class LocalMatch {
   }
 
   cpu(msg) {
+    this.tick();
     const r = act(this.g, 1, msg, Date.now());
     if (!r.error) this.deliver(r.events);
     this.think();
   }
 
   send(msg) {
-    if (this.closed) return;
+    if (this.closed || this.paused) return;
     if (msg.t === "aim") return;
     if (msg.t === "taunt") {
       if (Math.random() < 0.5) this.later(1400, () => this.onMessage({ t: "taunt", id: [0, 2, 4, 5][Math.floor(Math.random() * 4)] }));
       return;
     }
+    this.tick();
     const r = act(this.g, 0, msg, Date.now());
     if (r.error) this.onMessage({ t: "error", msg: r.error, re: msg.t });
     else this.deliver(r.events);
@@ -169,13 +213,14 @@ export class LocalMatch {
     }
     const threat = Math.max(0, ...g.volleys.filter((v) => v.by === 0 && !v.miss).map((v) => v.dead));
     const cpu = g.p[1];
-    const power = cpu.powerAt === g.volleys.length ? null : this.ai.choosePower(cpu.supplies, threat, this.turns);
+    const power = cpu.powerAt === g.volleys.length ? null : this.ai.choosePower(cpu.supplies, threat, this.turns, rulesOf(g));
     this.turns++;
     const shoot = () => {
       this.aiming = false;
       if (g.phase === "battle" && g.turn === 1) this.cpu({ t: "fire", guess: this.ai.guess() });
     };
     if (power) {
+      this.tick();
       const r = act(g, 1, { t: "power", ...power }, Date.now());
       if (!r.error) this.deliver(r.events);
       this.later(2200, shoot);
@@ -184,6 +229,7 @@ export class LocalMatch {
 
   close() {
     this.closed = true;
-    for (const id of this.timers) clearTimeout(id);
+    clearInterval(this.clock);
+    for (const job of this.timers.keys()) clearTimeout(job.id);
   }
 }

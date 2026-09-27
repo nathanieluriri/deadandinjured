@@ -96,6 +96,6 @@ export function publicPlayer(p) {
   return {
     id: p.id, name: p.name, secured: !!p.pass_hash,
     wins: p.wins, losses: p.losses, draws: p.draws, kills: p.kills, best: p.best,
-    soloWins: p.solo_wins, soloLosses: p.solo_losses,
+    soloWins: p.solo_wins, soloLosses: p.solo_losses, soloDraws: p.solo_draws ?? 0,
   };
 }

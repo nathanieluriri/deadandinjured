@@ -557,7 +557,7 @@ export class Director {
   }
 
   prebuildWords() {
-    for (const t of ["CRACKED", "OVERRUN", "STALEMATE", "VICTORY", "FORFEIT"]) this.wordFor(t);
+    for (const t of ["CRACKED", "OVERRUN", "STALEMATE", "VICTORY", "FORFEIT", "TIME"]) this.wordFor(t);
   }
 
   hideWords() {
@@ -565,7 +565,7 @@ export class Director {
   }
 
   async ending({ winner, reason, codes }) {
-    const text = winner === "draw" ? "STALEMATE" : winner === "me" ? (reason === "cracked" ? "CRACKED" : "VICTORY") : winner === "opp" ? (reason === "cracked" ? "OVERRUN" : "FORFEIT") : null;
+    const text = winner === "draw" ? "STALEMATE" : reason === "time" && winner !== "none" ? "TIME" : winner === "me" ? (reason === "cracked" ? "CRACKED" : "VICTORY") : winner === "opp" ? (reason === "cracked" ? "OVERRUN" : "FORFEIT") : null;
     if (winner === "me" || winner === "draw") gsap.to(this.world.flags.opp, { lower: winner === "draw" ? 0.5 : 1, duration: 2.2, ease: "power2.inOut" });
     if (winner === "opp" || winner === "draw") gsap.to(this.world.flags.me, { lower: winner === "draw" ? 0.5 : 1, duration: 2.2, ease: "power2.inOut" });
     if (winner === "me") for (const s of this.army.squad("me")) wait(rnd(0, 0.4)).then(() => s.cheer());

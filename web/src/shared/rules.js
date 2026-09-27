@@ -1,7 +1,51 @@
 export const LEN = 4;
 export const RPS = ["rock", "paper", "scissors"];
 export const POWERS = ["recon", "sniper", "smoke"];
-export const SUPPLIES = { win: 3, lose: 2 };
+export const POWER_NAMES = { recon: "Recon", sniper: "Sniper", smoke: "Smoke" };
+
+// A player's orders: the rules they bring to a match. The standard orders are the game as it
+// always was, plus a time limit.
+export const STANDARD_ORDERS = Object.freeze({ recon: true, sniper: true, smoke: true, crates: 3, minutes: 10 });
+export const MINUTES = [5, 10, 15];
+export const TURN_SECONDS = { 5: 30, 10: 45, 15: 60 };
+
+export function cleanOrders(o) {
+  const s = STANDARD_ORDERS;
+  if (typeof o === "string") o = parseOrders(o);
+  if (!o || typeof o !== "object") return { ...s };
+  const flag = (v, d) => (typeof v === "boolean" ? v : d);
+  const crates = Number(o.crates);
+  const minutes = Number(o.minutes);
+  return {
+    recon: flag(o.recon, s.recon),
+    sniper: flag(o.sniper, s.sniper),
+    smoke: flag(o.smoke, s.smoke),
+    crates: Number.isFinite(crates) ? Math.max(1, Math.min(5, Math.round(crates))) : s.crates,
+    minutes: MINUTES.includes(minutes) ? minutes : s.minutes,
+  };
+}
+
+export const anySupply = (o) => !!(o && (o.recon || o.sniper || o.smoke));
+
+// Six characters, safe in a URL: the three supply switches, the crates, then the minutes.
+export function packOrders(o) {
+  const c = cleanOrders(o);
+  return `${+c.recon}${+c.sniper}${+c.smoke}${c.crates}${String(c.minutes).padStart(2, "0")}`;
+}
+
+export function parseOrders(str) {
+  const m = /^([01])([01])([01])([1-5])(05|10|15)$/.exec(String(str || ""));
+  if (!m) return null;
+  return { recon: m[1] === "1", sniper: m[2] === "1", smoke: m[3] === "1", crates: Number(m[4]), minutes: Number(m[5]) };
+}
+
+export function randomOrders(rng = Math.random) {
+  return {
+    recon: rng() < 0.5, sniper: rng() < 0.5, smoke: rng() < 0.5,
+    crates: 1 + Math.floor(rng() * 5),
+    minutes: MINUTES[Math.floor(rng() * MINUTES.length)],
+  };
+}
 
 export function isCode(s) {
   return typeof s === "string" && /^[0-9]{4}$/.test(s) && new Set(s).size === LEN;
