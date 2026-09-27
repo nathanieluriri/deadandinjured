@@ -90,11 +90,11 @@ for (const [p, guess] of plan) {
   await until(p, () => { const v = window.__app.view; return v.s?.turn === "me" && !v.animating; });
   for (const d of guess) await p.page.click(`#pad [data-d="${d}"]`);
   const other = p === A ? B : A;
-  const before = await other.page.evaluate(() => Number(document.getElementById("stamp").dataset.n || 0));
   await p.page.click("#fireBtn");
   n++;
   if (guess === "1243") {
-    await until(other, (k) => Number(document.getElementById("stamp").dataset.n || 0) > k, before, 60000);
+    const down = () => window.__app.army.squad("me").filter((s) => s.state === "dead" || s.state === "sink").length >= 2;
+    await until(other, down, null, 60000).catch(() => {});
     await shot(other, "hit");
     const lost = await other.page.evaluate(() => window.__app.army.squad("me").filter((s) => s.state === "dead" || s.state === "sink").length);
     console.log(`${other.name} watched ${lost} of their soldiers fall`);

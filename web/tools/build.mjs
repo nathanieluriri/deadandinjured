@@ -15,17 +15,26 @@ cpSync(path.join(root, "static"), dist, { recursive: true });
 
 const hash = (buf) => createHash("sha256").update(buf).digest("hex").slice(0, 10);
 
+const out = {};
+for (const f of readdirSync(path.join(root, "models"))) {
+  const buf = readFileSync(path.join(root, "models", f));
+  const [base, ext] = f.split(".");
+  const hashed = `${base}-${hash(buf)}.${ext}`;
+  writeFileSync(path.join(dist, "assets", hashed), buf);
+  out[f] = `/assets/${hashed}`;
+}
+
 const js = await build({
   entryPoints: [path.join(root, "src/client/main.js")],
   bundle: true, format: "esm", target: "es2020", minify: !dev, sourcemap: false, write: false,
-  legalComments: "none", loader: { ".json": "json" }, define: { DEV: String(dev) },
+  legalComments: "none", loader: { ".json": "json" },
+  define: { DEV: String(dev), SOLDIER_URL: JSON.stringify(out["soldier.glb"]), PROPS_URL: JSON.stringify(out["props.glb"]) },
 });
 const css = await build({
   entryPoints: [path.join(root, "src/client/style.css")],
   bundle: true, minify: !dev, write: false, external: ["/fonts/*"],
 });
 
-const out = {};
 for (const [name, file] of [["app.js", js.outputFiles[0]], ["style.css", css.outputFiles[0]]]) {
   const [base, ext] = name.split(".");
   const hashed = `${base}-${hash(file.contents)}.${ext}`;
@@ -38,7 +47,9 @@ for (const f of readdirSync(path.join(dist, "assets"))) if (!keep.has(f)) rmSync
 
 const html = readFileSync(path.join(root, "src/client/index.html"), "utf8")
   .replace("%APP%", out["app.js"])
-  .replace("%CSS%", out["style.css"]);
+  .replace("%CSS%", out["style.css"])
+  .replace("%SOLDIER%", out["soldier.glb"])
+  .replace("%PROPS%", out["props.glb"]);
 writeFileSync(path.join(dist, "index.html"), html);
 
 const sizes = [];

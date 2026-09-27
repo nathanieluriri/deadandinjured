@@ -1,107 +1,130 @@
 import * as THREE from "three";
-import { merge as mergeGeometries } from "./merge.js";
-import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
+import { clone as cloneRig } from "three/addons/utils/SkeletonUtils.js";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { SIDES, groundHeight } from "./palette.js";
 
 const N = 8;
 const GRAVITY = 15;
-const BAND = { me: 0xd8432a, opp: 0xf3eee4 };
+const SCALE = 0.86;
+const PIVOT = 0.8;
+const TAU = Math.PI * 2;
 
-function geometries() {
-  return {
-    helmet: mergeGeometries([
-      new THREE.SphereGeometry(0.205, 18, 9, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.84, 1.06),
-      new THREE.CylinderGeometry(0.25, 0.255, 0.03, 22),
-    ]),
-    head: new THREE.SphereGeometry(0.145, 16, 12),
-    torso: new THREE.CapsuleGeometry(0.19, 0.24, 4, 12).scale(1, 1, 0.8),
-    pelvis: new THREE.CapsuleGeometry(0.15, 0.1, 4, 10).rotateZ(Math.PI / 2).scale(1, 1, 0.84),
-    pack: new RoundedBoxGeometry(0.34, 0.38, 0.17, 2, 0.05),
-    leg: mergeGeometries([
-      new THREE.CapsuleGeometry(0.086, 0.54, 4, 10).translate(0, -0.37, 0),
-      new RoundedBoxGeometry(0.15, 0.1, 0.27, 2, 0.035).translate(0, -0.8, 0.05),
-    ]),
-    arm: mergeGeometries([
-      new THREE.CapsuleGeometry(0.066, 0.4, 4, 10).translate(0, -0.27, 0),
-      new THREE.SphereGeometry(0.07, 10, 8).translate(0, -0.52, 0),
-    ]),
-    rifle: mergeGeometries([
-      new THREE.BoxGeometry(0.075, 0.12, 0.3).translate(0, -0.03, -0.36),
-      new THREE.BoxGeometry(0.062, 0.085, 0.46).translate(0, 0.005, -0.02),
-      new THREE.CylinderGeometry(0.019, 0.019, 0.56, 6).rotateX(Math.PI / 2).translate(0, 0.03, 0.47),
-    ]),
-    band: new THREE.TorusGeometry(0.155, 0.036, 6, 18).rotateX(Math.PI / 2),
-  };
-}
-
-const POSES = {
-  carry: { armL: [-0.95, 0.5], armR: [-0.45, -0.3], rifle: [0.08, 0.02, 0.22, -1.2, 0, 0.62] },
-  aim: { armL: [-1.42, 0.42], armR: [-1.25, -0.2], rifle: [0.1, 0.36, 0.3, -0.02, 0, 0] },
+// Part numbers are written into the model by tools/soldier.mjs.
+const SKIN = [0xc68e5a, 0x9c6a3e, 0xe2b384, 0x7a4d2b, 0xd09a66, 0x5e3b22, 0xb57f4f, 0xeec59a];
+const UNIFORM = {
+  me: { 1: 0x201c19, 2: 0x7a6c53, 3: 0xdcd2bd, 4: 0x2a2623, 5: 0x2a2623, 6: 0xb4a78b, 7: 0x2f2a25, 8: 0xe8e0cf },
+  opp: { 1: 0x1d1514, 2: 0x3a2c28, 3: 0xb5412b, 4: 0x251b19, 5: 0x251b19, 6: 0x7c2b1f, 7: 0xf2e8d8, 8: 0xc64a30 },
 };
+const RIFLE = { 9: 0x8b8f98, 10: 0x54555b, 11: 0x93623a, 12: 0x333338 };
+const BAND = 0xf1eadf;
+const CROSS = 0xc9311f;
 
 const tmpM = new THREE.Matrix4();
 const tmpQ = new THREE.Quaternion();
-const tmpE = new THREE.Euler();
 const tmpV = new THREE.Vector3();
+const tmpW = new THREE.Vector3();
 const tmpS = new THREE.Vector3();
-
-function local(out, parent, x, y, z, rx = 0, ry = 0, rz = 0, order = "XYZ", s = 1) {
-  tmpE.set(rx, ry, rz, order);
-  tmpQ.setFromEuler(tmpE);
-  tmpV.set(x, y, z);
-  tmpS.set(s, s, s);
-  tmpM.compose(tmpV, tmpQ, tmpS);
-  return out.multiplyMatrices(parent, tmpM);
-}
+const UP = new THREE.Vector3(0, 1, 0);
+const DOWN = new THREE.Vector3(0, -1, 0);
+const X = new THREE.Vector3(1, 0, 0);
+const Y = new THREE.Vector3(0, 1, 0);
 
 const damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt));
 const rand = (a, b) => a + Math.random() * (b - a);
 
+function paint(geo, colors) {
+  const part = geo.attributes._part;
+  const out = new Uint8Array(part.count * 3);
+  const c = new THREE.Color();
+  for (let i = 0; i < part.count; i++) {
+    c.setHex(colors[part.getX(i)] ?? 0xff00ff);
+    out[i * 3] = Math.round(c.r * 255);
+    out[i * 3 + 1] = Math.round(c.g * 255);
+    out[i * 3 + 2] = Math.round(c.b * 255);
+  }
+  const g = new THREE.BufferGeometry();
+  g.index = geo.index;
+  for (const k of ["position", "normal", "skinIndex", "skinWeight"]) if (geo.attributes[k]) g.setAttribute(k, geo.attributes[k]);
+  g.setAttribute("color", new THREE.BufferAttribute(out, 3, true));
+  return g;
+}
+
+// A piece that can come off: its geometry, where it sits on its bone, and how it rests once it
+// lands (the local axis that ends up pointing along `rest`, and how high its centre then sits).
+function piece(mesh, rest) {
+  mesh.updateMatrix();
+  const box = new THREE.Box3().setFromBufferAttribute(mesh.geometry.attributes.position);
+  const size = box.getSize(new THREE.Vector3()).multiply(mesh.scale).multiplyScalar(SCALE);
+  const thin = size.x < size.y ? (size.x < size.z ? 0 : 2) : size.y < size.z ? 1 : 2;
+  const axis = rest === DOWN ? Y.clone() : new THREE.Vector3().setComponent(thin, 1);
+  return { mesh, attach: mesh.matrix.clone(), scale: mesh.scale.x * SCALE, axis, rest, lift: size.getComponent(rest === DOWN ? 1 : thin) / 2, size };
+}
+
+export async function loadSoldier(url) {
+  const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(url);
+  const scene = gltf.scene;
+  const helmet = piece(scene.getObjectByName("helmet"), DOWN);
+  const rifle = piece(scene.getObjectByName("rifle"), UP);
+  helmet.mesh.removeFromParent();
+  rifle.mesh.removeFromParent();
+  const body = scene.getObjectByProperty("isSkinnedMesh", true);
+  return { scene, body: body.geometry, helmet, rifle, clips: Object.fromEntries(gltf.animations.map((c) => [c.name, c])) };
+}
+
 class Loose {
-  constructor() {
+  constructor(p) {
+    this.p = p;
     this.pos = new THREE.Vector3();
     this.vel = new THREE.Vector3();
-    this.rot = new THREE.Euler();
+    this.q = new THREE.Quaternion();
+    this.restQ = new THREE.Quaternion();
     this.spin = new THREE.Vector3();
     this.on = true;
     this.rest = false;
   }
 
-  launch(from, vel, spin) {
-    this.on = false;
-    this.rest = false;
-    this.pos.copy(from);
+  launch(world, vel, spin) {
+    world.decompose(this.pos, this.q, tmpS);
     this.vel.copy(vel);
     this.spin.copy(spin);
-    this.rot.set(0, 0, 0);
+    this.on = false;
+    this.rest = false;
   }
 
-  update(dt, lift, flip) {
-    if (this.on || this.rest) return;
+  update(dt) {
+    if (this.on) return;
+    if (this.rest) {
+      this.q.slerp(this.restQ, 1 - Math.exp(-dt * 12));
+      return;
+    }
     this.vel.y -= GRAVITY * dt;
     this.pos.addScaledVector(this.vel, dt);
-    this.rot.x += this.spin.x * dt;
-    this.rot.y += this.spin.y * dt;
-    this.rot.z += this.spin.z * dt;
-    const g = groundHeight(this.pos.x, this.pos.z) + lift;
-    if (this.pos.y < g) {
-      this.pos.y = g;
-      if (this.vel.y < -2) {
-        this.vel.y *= -0.35;
-        this.vel.x *= 0.5;
-        this.vel.z *= 0.5;
-        this.spin.multiplyScalar(0.5);
-      } else {
-        this.rest = true;
-        this.rot.x = flip;
-        this.rot.z = 0;
-      }
+    const w = this.spin.length();
+    if (w > 0) this.q.premultiply(tmpQ.setFromAxisAngle(tmpV.copy(this.spin).divideScalar(w), w * dt));
+    const g = groundHeight(this.pos.x, this.pos.z) + this.p.lift * 0.8;
+    if (this.pos.y > g) return;
+    this.pos.y = g;
+    if (this.vel.y < -2) {
+      this.vel.y *= -0.35;
+      this.vel.x *= 0.5;
+      this.vel.z *= 0.5;
+      this.spin.multiplyScalar(0.5);
+    } else {
+      this.rest = true;
+      tmpV.copy(this.p.axis).applyQuaternion(this.q);
+      this.restQ.setFromUnitVectors(tmpV, this.p.rest).multiply(this.q);
     }
+  }
+
+  matrix(out, sc) {
+    return out.compose(this.pos, this.q, tmpS.setScalar(this.p.scale * sc));
   }
 }
 
 class Soldier {
-  constructor(army, side, i) {
+  constructor(army, side, i, kit) {
     this.army = army;
     this.side = side;
     this.sd = SIDES[side];
@@ -110,25 +133,50 @@ class Soldier {
     this.pos = this.home.clone();
     this.vel = new THREE.Vector3();
     this.yaw = this.sd.face;
-    this.fall = 0;
-    this.roll = 0;
-    this.fallVel = 0;
-    this.rollVel = 0;
     this.spinVel = 0;
+    this.flip = 0;
+    this.flipTo = 0;
     this.state = "idle";
     this.t = 0;
     this.phase = Math.random() * 20;
-    this.p = { crouch: 0, lean: 0, twist: 0, hx: 0, hy: 0, aLx: -0.95, aLz: 0.5, aRx: -0.45, aRz: -0.3, lLx: 0, lRx: 0, lLz: 0, lRz: 0, aim: 0, lift: 0 };
     this.flash = 0;
     this.band = 0;
     this.scale = 1;
+    this.lift = 0;
+    this.hurt = 0;
     this.aiming = false;
-    this.helmet = new Loose();
-    this.rifle = new Loose();
     this.landed = false;
     this.bounces = 0;
     this.look = 0;
+    this.lookNow = 0;
     this.lookT = rand(1, 4);
+    this.helmet = new Loose(kit.helmet);
+    this.rifle = new Loose(kit.rifle);
+
+    this.root = new THREE.Group();
+    const pivot = new THREE.Group();
+    pivot.position.y = PIVOT;
+    this.pivot = pivot;
+    this.rig = cloneRig(kit.scene);
+    this.rig.position.y = -PIVOT;
+    this.rig.scale.setScalar(SCALE);
+    pivot.add(this.rig);
+    this.root.add(pivot);
+    army.stage.scene.add(this.root);
+
+    this.body = this.rig.getObjectByProperty("isSkinnedMesh", true);
+    const colors = { ...UNIFORM[side], 0: SKIN[(i + (side === "opp" ? 4 : 0)) % SKIN.length] };
+    this.body.geometry = paint(kit.body, colors);
+    this.body.material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.74, metalness: 0 });
+    this.body.frustumCulled = false;
+    const bone = (n) => this.rig.getObjectByName(n);
+    this.bones = { head: bone("Head"), hand: bone("Index1R"), abdomen: bone("Abdomen"), neck: bone("Neck"), hips: bone("Hips") };
+
+    this.mixer = new THREE.AnimationMixer(this.rig);
+    this.acts = {};
+    for (const [name, clip] of Object.entries(kit.clips)) this.acts[name] = this.mixer.clipAction(clip);
+    this.act = null;
+    this.stance(0);
   }
 
   get alive() {
@@ -140,12 +188,43 @@ class Soldier {
     this.t = 0;
   }
 
+  play(name, { fade = 0.22, loop = true, speed = 1, at = 0, hold = false } = {}) {
+    const a = this.acts[name];
+    const prev = this.act;
+    a.reset();
+    a.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
+    a.clampWhenFinished = !loop;
+    a.timeScale = speed;
+    a.time = at;
+    a.paused = hold;
+    a.play();
+    if (prev && prev !== a) {
+      if (fade > 0) {
+        a.fadeIn(fade);
+        // Fade out from wherever an interrupted fade left it, not from full weight.
+        prev._scheduleFading(fade, prev.getEffectiveWeight(), 0);
+      } else prev.stop();
+    }
+    this.act = a;
+    this.clip = name;
+    return a;
+  }
+
+  // The loop a standing soldier holds: rifle up while the squad aims, at ease otherwise.
+  stance(fade = 0.3) {
+    this.aimed = this.aiming;
+    if (this.aiming) this.play("Idle_Shoot", { fade, at: 0.05, hold: true });
+    else this.play("Idle", { fade, at: Math.random() * 1.6, speed: rand(0.85, 1.08) });
+  }
+
   aim(on) {
     this.aiming = on;
   }
 
   duck() {
-    if (this.alive) this.set("duck");
+    if (!this.alive) return;
+    this.set("duck");
+    this.play("Duck", { fade: 0.1, loop: false, speed: rand(1.2, 1.4) });
   }
 
   wound() {
@@ -153,16 +232,24 @@ class Soldier {
     this.set("wounded");
     this.flash = 1;
     this.vel.set(0, 0, 0);
+    this.play("HitReact", { fade: 0.06, loop: false, speed: 1.05 });
+    if (this.helmet.on) this.knock(this.helmet, 0.6, rand(3.2, 4.2), 7);
   }
 
   cheer() {
-    if (this.alive) this.set(this.state === "wounded" ? "wounded" : "cheer");
+    if (!this.alive || this.state === "wounded") return;
+    this.set("cheer");
+    this.play("Wave", { fade: 0.2, speed: rand(1.25, 1.45), at: Math.random() });
   }
 
   salute() {
-    if (this.alive && this.state === "idle") this.set("salute");
+    if (!this.alive || this.state !== "idle") return;
+    this.set("salute");
+    this.play("Wave", { fade: 0.2, loop: false, speed: 1.15 });
   }
 
+  // Blown backwards: a ballistic arc (big hits throw them higher and flip them), the fall
+  // timed to land as the body does, helmet and rifle thrown clear.
   kill(dir, big = false) {
     if (!this.alive) return;
     this.set("dead");
@@ -170,15 +257,20 @@ class Soldier {
     this.landed = false;
     this.bounces = 0;
     const launch = big || Math.random() < 0.45;
-    const push = launch ? rand(2.6, 3.6) : rand(1.4, 2.1);
-    this.vel.set(dir.x * push + rand(-0.6, 0.6), launch ? rand(5.2, 7) : rand(1.4, 2.2), dir.z * push);
-    this.fallVel = -(launch ? rand(4.5, 7) : rand(2.8, 3.8));
-    this.rollVel = rand(-1, 1) * (launch ? 3 : 1);
-    this.spinVel = rand(-1, 1) * (launch ? 4 : 0.8);
-    const head = this.worldPoint(0, 1.7, 0);
-    this.helmet.launch(head, new THREE.Vector3(dir.x * 1.5 + rand(-1.2, 1.2), rand(4.5, 6.5), dir.z * 1.5 + rand(-0.8, 0.8)), new THREE.Vector3(rand(-9, 9), rand(-6, 6), rand(-9, 9)));
-    const hand = this.worldPoint(0.2, 1.2, 0.3);
-    this.rifle.launch(hand, new THREE.Vector3(dir.x * 1.2 + rand(-1.5, 1.5), rand(3, 5), dir.z * 1.2 + rand(-1, 1)), new THREE.Vector3(rand(-6, 6), rand(-8, 8), rand(-6, 6)));
+    const push = launch ? rand(2.6, 3.6) : rand(1.2, 1.8);
+    const up = launch ? rand(5.2, 7) : rand(1.2, 1.8);
+    this.vel.set(dir.x * push + rand(-0.6, 0.6), up, dir.z * push);
+    this.spinVel = rand(-1, 1) * (launch ? 3.2 : 0.6);
+    this.flipTo = big && launch && Math.random() < 0.7 ? -TAU : 0;
+    this.air = (2 * up) / GRAVITY;
+    this.play("Death", { fade: 0.06, loop: false, speed: THREE.MathUtils.clamp(0.62 / (0.85 * this.air), 0.55, 1.1) });
+    if (this.helmet.on) this.knock(this.helmet, 1.5, rand(4.5, 6.5), 9, dir);
+    if (this.rifle.on) this.knock(this.rifle, 1.2, rand(3, 5), 7, dir);
+  }
+
+  knock(item, push, up, spin, dir = tmpW.set(0, 0, this.sd.dir)) {
+    const world = item === this.helmet ? this.helmetMatrix(tmpM) : this.rifleMatrix(tmpM);
+    item.launch(world, tmpV.set(dir.x * push + rand(-1.2, 1.2), up, dir.z * push + rand(-0.8, 0.8)), tmpW.set(rand(-spin, spin), rand(-spin, spin), rand(-spin, spin)));
   }
 
   sink() {
@@ -188,80 +280,83 @@ class Soldier {
   respawn(delay = 0) {
     this.set("rise");
     this.t = -delay;
-    this.fall = this.roll = 0;
-    this.fallVel = this.rollVel = this.spinVel = 0;
+    this.risen = false;
+    this.flip = this.flipTo = 0;
+    this.spinVel = 0;
     this.yaw = this.sd.face;
     this.helmet.on = true;
     this.rifle.on = true;
     this.band = 0;
+    this.hurt = 0;
     this.flash = 0;
     this.scale = 1;
     this.pos.set(this.home.x, -1.4, this.home.z + this.sd.dir * 2.5);
   }
 
   heal() {
-    if (this.state === "wounded") this.set("idle");
+    if (this.state !== "wounded") return;
+    this.set("idle");
+    this.stance();
   }
 
-  worldPoint(x, y, z) {
-    const v = new THREE.Vector3(x, y, z).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
-    return v.add(this.pos);
+  helmetMatrix(out) {
+    return out.multiplyMatrices(this.bones.head.matrixWorld, this.army.kit.helmet.attach);
+  }
+
+  rifleMatrix(out) {
+    return out.multiplyMatrices(this.bones.hand.matrixWorld, this.army.kit.rifle.attach);
+  }
+
+  // Where the body is, for dust and shadows: the hips, which the fall carries away from the feet.
+  middle(out = new THREE.Vector3()) {
+    return out.setFromMatrixPosition(this.bones.hips.matrixWorld);
   }
 
   update(dt, time) {
     this.t += dt;
-    const p = this.p;
-    const T = { crouch: 0, lean: 0.04, twist: 0, hx: 0, hy: 0, lLx: 0, lRx: 0, lLz: 0.02, lRz: -0.02, aim: this.aiming ? 1 : 0, lift: 0 };
-    let k = 10;
-    const breathe = Math.sin(time * 1.7 + this.phase) * 0.018;
     this.flash = Math.max(0, this.flash - dt * 3.2);
+    let lift = 0;
+    let hurt = 0;
+    const a = this.act;
+    const done = !a.isRunning() || a.time >= a.getClip().duration;
 
     this.lookT -= dt;
     if (this.lookT < 0) {
       this.lookT = rand(1.5, 5);
-      this.look = rand(-0.5, 0.5);
+      this.look = rand(-0.55, 0.55);
     }
 
     switch (this.state) {
       case "idle":
-        T.hy = this.look;
-        T.lean += breathe;
+        if (this.aiming !== this.aimed) this.stance();
         break;
-      case "duck": {
-        const on = this.t < 0.55;
-        T.crouch = on ? 1 : 0;
-        T.lean = on ? 0.7 : 0.04;
-        T.hx = on ? 0.45 : 0;
-        T.lLx = on ? -0.9 : 0;
-        T.lRx = on ? 0.55 : 0;
-        T.aim = 0;
-        k = on ? 22 : 8;
-        if (this.t > 1.1) this.set("idle");
+      case "duck":
+        if (done) {
+          this.set("idle");
+          this.stance(0.35);
+        }
         break;
-      }
       case "wounded": {
+        hurt = 1;
         const stagger = Math.max(0, 1 - this.t * 2.5);
-        T.crouch = 0.45 + stagger * 0.2;
-        T.lean = 0.5 + Math.sin(time * 9 + this.phase) * 0.02;
-        T.hx = 0.35;
-        T.lLx = -0.55;
-        T.lRx = 0.35;
-        T.aim = 0;
-        this.band = damp(this.band, 1, 9, dt);
-        const back = stagger * 0.45 * this.sd.dir * dt * 3;
-        this.pos.z += back;
+        this.pos.z += stagger * 0.45 * this.sd.dir * dt * 3;
         this.pos.z = damp(this.pos.z, this.home.z, 1.5, dt);
+        this.band = damp(this.band, 1, 9, dt);
+        if (this.clip === "HitReact" && done) this.play("Idle", { fade: 0.35, speed: 0.62, at: Math.random() });
         break;
       }
       case "cheer":
-        T.aim = 0;
-        T.lift = Math.abs(Math.sin(this.t * 7 + this.phase)) * 0.35;
-        T.hx = -0.3;
-        if (this.t > 3.5) this.set("idle");
+        lift = Math.abs(Math.sin(this.t * 7 + this.phase)) * 0.32;
+        if (this.t > 3.5) {
+          this.set("idle");
+          this.stance();
+        }
         break;
       case "salute":
-        T.aim = 0;
-        if (this.t > 1.6) this.set("idle");
+        if (done) {
+          this.set("idle");
+          this.stance();
+        }
         break;
       case "rise": {
         if (this.t < 0) {
@@ -269,140 +364,135 @@ class Soldier {
           break;
         }
         this.scale = 1;
+        if (!this.risen && this.clip !== "Jump_Idle") this.play("Jump_Idle", { fade: 0, speed: 1.3 });
         const u = Math.min(1, this.t / 0.75);
         const from = this.home.z + this.sd.dir * 2.5;
         this.pos.x = this.home.x;
         this.pos.z = from + (this.home.z - from) * u;
-        this.pos.y = -1.4 * (1 - u) + Math.sin(u * Math.PI) * 0.9;
-        T.crouch = (1 - u) * 0.6;
-        T.lean = (1 - u) * 0.5;
-        T.aim = 0;
-        k = 30;
-        if (u >= 1) {
+        this.pos.y = -1.4 * (1 - u) * (1 - u) + Math.sin(u * Math.PI) * 0.25;
+        if (u >= 1 && !this.risen) {
+          this.risen = true;
           this.pos.copy(this.home);
-          this.set("idle");
+          this.play("Jump_Land", { fade: 0.12, loop: false, speed: 1.2 });
           this.army.emit("risen", this);
+        }
+        if (this.risen && done) {
+          this.set("idle");
+          this.stance(0.25);
         }
         break;
       }
       case "dead":
+        this.fly(dt);
+        break;
       case "sink":
-        this.updateBody(dt);
+        this.pos.y -= dt * 1.1;
+        this.scale = Math.max(0, 1 - this.t * 1.3);
+        if (this.scale <= 0) this.set("gone");
         break;
     }
 
-    if (this.state === "dead" || this.state === "sink") {
-      const flail = this.landed ? 0 : 1;
-      T.aim = 0;
-      T.lLz = this.landed ? 0.22 : Math.sin(time * 14 + this.phase) * 0.5;
-      T.lRz = this.landed ? -0.22 : -Math.sin(time * 13 + this.phase) * 0.5;
-      T.lLx = flail * Math.sin(time * 11) * 0.6;
-      T.lRx = -flail * Math.sin(time * 12) * 0.6;
-      T.hx = this.landed ? -0.3 : 0.4;
-      k = this.landed ? 6 : 14;
-    }
-
-    for (const key of Object.keys(T)) p[key] = damp(p[key], T[key], key === "aim" ? 7 : k, dt);
-
-    const carry = POSES.carry;
-    const aimP = POSES.aim;
-    let aLx = carry.armL[0] + (aimP.armL[0] - carry.armL[0]) * p.aim;
-    let aLz = carry.armL[1] + (aimP.armL[1] - carry.armL[1]) * p.aim;
-    let aRx = carry.armR[0] + (aimP.armR[0] - carry.armR[0]) * p.aim;
-    let aRz = carry.armR[1] + (aimP.armR[1] - carry.armR[1]) * p.aim;
-    if (this.state === "duck" && this.t < 0.55) {
-      aLx = -2.5; aLz = 0.55; aRx = -2.5; aRz = -0.55;
-    } else if (this.state === "wounded") {
-      aLx = -1.05; aLz = 0.95; aRx = -0.25; aRz = -0.08;
-    } else if (this.state === "cheer") {
-      const w = Math.sin(this.t * 7 + this.phase);
-      aLx = -2.85 - w * 0.2; aLz = -0.35; aRx = -2.85 + w * 0.2; aRz = 0.35;
-    } else if (this.state === "salute") {
-      aRx = -2.1; aRz = -1.05;
-    } else if (this.state === "dead" || this.state === "sink") {
-      if (this.landed) {
-        aLx = -0.3; aLz = -1.35; aRx = -0.3; aRz = 1.35;
-      } else {
-        aLx = -2.2 + Math.sin(time * 15 + this.phase) * 0.8; aLz = -0.6; aRx = -2.4 + Math.sin(time * 13) * 0.8; aRz = 0.6;
-      }
-    }
-    const ak = this.state === "dead" ? 12 : 11;
-    p.aLx = damp(p.aLx, aLx, ak, dt);
-    p.aLz = damp(p.aLz, aLz, ak, dt);
-    p.aRx = damp(p.aRx, aRx, ak, dt);
-    p.aRz = damp(p.aRz, aRz, ak, dt);
-
-    this.helmet.update(dt, 0.02, Math.PI);
-    this.rifle.update(dt, 0.04, Math.PI / 2);
+    this.lift = damp(this.lift, lift, 18, dt);
+    this.hurt = damp(this.hurt, hurt, 6, dt);
+    this.lookNow = damp(this.lookNow, this.state === "idle" && !this.aiming ? this.look : 0, 3, dt);
+    this.helmet.update(dt);
+    this.rifle.update(dt);
   }
 
-  updateBody(dt) {
-    if (this.state === "sink") {
-      this.pos.y -= dt * 1.1;
-      this.scale = Math.max(0, 1 - this.t * 1.3);
-      if (this.scale <= 0) this.set("gone");
-      return;
+  fly(dt) {
+    const g = groundHeight(this.pos.x, this.pos.z);
+    const air = this.pos.y > g + 0.001 || this.vel.y > 0;
+    if (air) {
+      this.vel.y -= GRAVITY * dt;
+      this.pos.addScaledVector(this.vel, dt);
+      this.yaw += this.spinVel * dt;
+      if (this.flipTo) this.flip = this.flipTo * Math.min(1, 1 - Math.pow(1 - Math.min(1, this.t / this.air), 2));
     }
-    const sign = Math.sign(this.fallVel || -1);
-    this.vel.y -= GRAVITY * dt;
-    this.pos.addScaledVector(this.vel, dt);
-    this.yaw += this.spinVel * dt;
-    this.roll += this.rollVel * dt;
-    this.fall += this.fallVel * dt;
-    if (Math.abs(this.fall) >= Math.PI / 2) {
-      this.fall = (Math.PI / 2) * sign;
-      this.fallVel = 0;
-    }
-    const lying = Math.abs(Math.sin(this.fall));
-    const rest = groundHeight(this.pos.x, this.pos.z) + lying * (this.fall < 0 ? 0.26 : 0.19);
-    if (this.pos.y <= rest) {
-      this.pos.y = rest;
-      if (this.vel.y < -1.6 && this.bounces < 2) {
+    if (this.pos.y <= g) {
+      this.pos.y = g;
+      if (this.vel.y < -2.5 && this.bounces < 1 && this.air > 0.5) {
         this.bounces++;
-        this.vel.y *= -0.3;
-        this.vel.x *= 0.5;
-        this.vel.z *= 0.5;
+        this.vel.y *= -0.25;
+        this.vel.x *= 0.45;
+        this.vel.z *= 0.45;
         this.spinVel *= 0.4;
-        this.rollVel *= 0.4;
-        if (!this.landed) {
-          this.landed = true;
-          this.army.emit("landed", this);
-        }
       } else {
         this.vel.set(0, 0, 0);
         this.spinVel = 0;
-        this.rollVel *= Math.exp(-dt * 8);
-        this.roll *= Math.exp(-dt * 4);
-        if (Math.abs(this.fall) < Math.PI / 2) this.fallVel = sign * Math.max(Math.abs(this.fallVel), 4) + sign * dt * 30;
-        if (!this.landed) {
-          this.landed = true;
-          this.army.emit("landed", this);
-        }
       }
+      this.flip = this.flipTo;
     }
+    if (!this.landed && this.pos.y <= g + 0.02 && this.act.time > 0.42) {
+      this.landed = true;
+      this.army.emit("landed", this);
+    }
+  }
+
+  // Small adjustments on top of the clip: the idle glance, and a wounded soldier's stoop. Bones
+  // a clip leaves alone keep last frame's value, so each tweak is taken back before the mixer runs.
+  tweak() {
+    const b = this.bones;
+    this.bend(b.head, Y, this.lookNow, 0);
+    this.bend(b.abdomen, X, 0.42 * this.hurt, 1);
+    this.bend(b.neck, X, 0.2 * this.hurt, 2);
+  }
+
+  bend(bone, axis, angle, k) {
+    const saved = (this.saved ||= [new THREE.Quaternion(), new THREE.Quaternion(), new THREE.Quaternion()]);
+    const bones = (this.bent ||= []);
+    bones[k] = Math.abs(angle) > 0.001 ? bone : null;
+    if (!bones[k]) return;
+    saved[k].copy(bone.quaternion);
+    bone.quaternion.multiply(tmpQ.setFromAxisAngle(axis, angle));
+  }
+
+  untweak() {
+    if (!this.bent) return;
+    this.bent.forEach((bone, k) => bone && bone.quaternion.copy(this.saved[k]));
+  }
+
+  place() {
+    const r = this.root;
+    const hide = this.army.hidden[this.side] || this.state === "gone" || this.scale <= 0.001;
+    r.visible = !hide;
+    r.position.set(this.pos.x, this.pos.y + this.lift, this.pos.z);
+    r.rotation.set(0, this.yaw, 0);
+    r.scale.setScalar(Math.max(0.001, this.scale));
+    this.pivot.rotation.x = this.flip;
+    const m = this.body.material;
+    const dim = this.state === "dead" || this.state === "sink" ? 0.72 : 1;
+    m.color.setScalar(dim);
+    m.emissive.setRGB(1, 0.9, 0.78).multiplyScalar(this.flash * this.flash * 0.45);
+    r.updateMatrixWorld(true);
   }
 }
 
 export class Army {
-  constructor(stage) {
+  constructor(stage, kit) {
     this.stage = stage;
+    this.kit = kit;
     this.listeners = {};
-    const g = geometries();
-    const mat = new THREE.MeshStandardMaterial({ roughness: 0.58, metalness: 0 });
-    const make = (geo, count) => {
-      const m = new THREE.InstancedMesh(geo, mat, count);
+    this.soldiers = [];
+    for (const side of ["me", "opp"]) for (let i = 0; i < 4; i++) this.soldiers.push(new Soldier(this, side, i, kit));
+    this.squads = { me: this.soldiers.slice(0, 4), opp: this.soldiers.slice(4) };
+
+    const inst = (geo, count) => {
+      const m = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0 }), count);
       m.frustumCulled = false;
       m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      for (let i = 0; i < count; i++) m.setColorAt(i, new THREE.Color(1, 1, 1));
       stage.scene.add(m);
       return m;
     };
-    this.mesh = {
-      helmet: make(g.helmet, N), head: make(g.head, N), torso: make(g.torso, N), pelvis: make(g.pelvis, N),
-      pack: make(g.pack, N), leg: make(g.leg, N * 2), arm: make(g.arm, N * 2), rifle: make(g.rifle, N), band: make(g.band, N),
+    this.helmets = {
+      me: inst(paint(kit.helmet.mesh.geometry, UNIFORM.me), 4),
+      opp: inst(paint(kit.helmet.mesh.geometry, UNIFORM.opp), 4),
     };
-    this.soldiers = [];
-    for (const side of ["me", "opp"]) for (let i = 0; i < 4; i++) this.soldiers.push(new Soldier(this, side, i));
-    this.squads = { me: this.soldiers.slice(0, 4), opp: this.soldiers.slice(4) };
+    this.rifles = inst(paint(kit.rifle.mesh.geometry, RIFLE), N);
+    this.rifles.material.roughness = 0.45;
+    this.rifles.material.metalness = 0.25;
+    this.bands = inst(bandage(), N);
+    this.bandAt = bandPlace(kit.helmet);
 
     const shadowTex = (() => {
       const c = document.createElement("canvas");
@@ -423,14 +513,11 @@ export class Army {
     this.shadows.frustumCulled = false;
     stage.scene.add(this.shadows);
 
-    this.colors = { me: new THREE.Color(SIDES.me.clay), opp: new THREE.Color(SIDES.opp.clay) };
-    this.white = new THREE.Color(0xfff4e0);
-    this.c = new THREE.Color();
-    for (let i = 0; i < N; i++) {
-      const s = this.soldiers[i];
-      this.mesh.band.setColorAt(i, new THREE.Color(BAND[s.side]));
-    }
-    this.frames = Array.from({ length: 12 }, () => new THREE.Matrix4());
+    this.white = new THREE.Color();
+    this.m = new THREE.Matrix4();
+    this.zero = new THREE.Matrix4().makeScale(0, 0, 0);
+    this.a = new THREE.Vector3();
+    this.b = new THREE.Vector3();
     this.hidden = { me: false, opp: false };
     stage.hooks.push((dt, time) => this.update(dt, time));
     this.update(0, 0);
@@ -445,82 +532,47 @@ export class Army {
   }
 
   update(dt, time) {
-    const m = this.mesh;
-    const [root, waist, torso, head, tmp, zero] = this.frames;
-    zero.makeScale(0, 0, 0);
-    const at = this.at || (this.at = new THREE.Vector3());
-    const size = this.size || (this.size = new THREE.Vector3());
+    const { m, zero, a, b } = this;
     for (let i = 0; i < N; i++) {
       const s = this.soldiers[i];
       s.update(dt, time);
-      const p = s.p;
-      const hide = this.hidden[s.side] || s.state === "gone";
-      const sc = hide ? 0 : s.scale;
-      tmpE.set(s.fall, 0, s.roll, "XYZ");
-      const lift = p.lift;
-      tmpM.makeRotationY(s.yaw);
-      root.makeTranslation(s.pos.x, s.pos.y + lift, s.pos.z).multiply(tmpM);
-      tmpQ.setFromEuler(tmpE);
-      tmpM.compose(tmpV.set(0, 0, 0), tmpQ, tmpS.set(sc, sc, sc));
-      root.multiply(tmpM);
+      s.untweak();
+      s.mixer.update(dt);
+      s.tweak();
+      s.place();
+      const show = s.root.visible;
+      const sc = s.scale;
+      const dim = s.state === "dead" || s.state === "sink" ? 0.72 : 1;
+      const glow = 1 + s.flash * s.flash * 0.8;
+      this.white.setScalar(dim * glow);
 
-      const hip = 0.92 - p.crouch * 0.36;
-      local(waist, root, 0, hip + 0.06, 0, p.lean, p.twist, 0);
-      local(torso, waist, 0, 0.26, 0);
-      m.torso.setMatrixAt(i, torso);
-      m.pelvis.setMatrixAt(i, local(tmp, root, 0, hip + 0.03, 0, p.lean * 0.3, 0, 0));
-      m.pack.setMatrixAt(i, local(tmp, waist, 0, 0.3, -0.21));
-      local(head, waist, 0, 0.62, 0.015, p.hx, p.hy, 0);
-      m.head.setMatrixAt(i, head);
-      m.band.setMatrixAt(i, s.band > 0.01 ? local(tmp, head, 0, 0.02, 0, 0, 0, 0, "XYZ", s.band) : zero);
+      const helmets = this.helmets[s.side];
+      helmets.setMatrixAt(s.i, !show ? zero : s.helmet.on ? s.helmetMatrix(m) : s.helmet.matrix(m, sc));
+      helmets.setColorAt(s.i, this.white);
+      this.rifles.setMatrixAt(i, !show ? zero : s.rifle.on ? s.rifleMatrix(m) : s.rifle.matrix(m, sc));
+      this.rifles.setColorAt(i, this.white);
+      if (show && s.band > 0.01) {
+        m.multiplyMatrices(s.bones.head.matrixWorld, this.bandAt);
+        this.bands.setMatrixAt(i, m.multiply(tmpM.makeScale(s.band, s.band, s.band)));
+      } else this.bands.setMatrixAt(i, zero);
 
-      if (s.helmet.on) m.helmet.setMatrixAt(i, local(tmp, head, 0, 0.06, 0));
-      else {
-        const h = s.helmet;
-        tmpQ.setFromEuler(h.rot);
-        m.helmet.setMatrixAt(i, tmp.compose(h.pos, tmpQ, tmpS.set(sc, sc, sc)));
-      }
-
-      m.arm.setMatrixAt(i * 2, local(tmp, waist, -0.255, 0.44, 0, p.aLx, 0, p.aLz));
-      m.arm.setMatrixAt(i * 2 + 1, local(tmp, waist, 0.255, 0.44, 0, p.aRx, 0, p.aRz));
-      m.leg.setMatrixAt(i * 2, local(tmp, root, -0.1, hip, 0, p.lLx, 0, p.lLz));
-      m.leg.setMatrixAt(i * 2 + 1, local(tmp, root, 0.1, hip, 0, p.lRx, 0, p.lRz));
-
-      if (s.rifle.on) {
-        const a = POSES.carry.rifle;
-        const b = POSES.aim.rifle;
-        const t = p.aim;
-        const r = a.map((v, j) => v + (b[j] - v) * t);
-        m.rifle.setMatrixAt(i, local(tmp, waist, r[0], r[1], r[2], r[3], r[4], r[5], "ZYX"));
-      } else {
-        const rl = s.rifle;
-        tmpQ.setFromEuler(rl.rot);
-        m.rifle.setMatrixAt(i, tmp.compose(rl.pos, tmpQ, tmpS.set(sc, sc, sc)));
-      }
-
-      this.c.copy(this.colors[s.side]);
-      if (s.state === "dead" || s.state === "sink") this.c.multiplyScalar(0.72);
-      if (s.flash > 0) this.c.lerp(this.white, Math.min(1, s.flash * 1.4));
-      for (const key of ["helmet", "head", "torso", "pelvis", "pack", "rifle"]) m[key].setColorAt(i, this.c);
-      m.arm.setColorAt(i * 2, this.c);
-      m.arm.setColorAt(i * 2 + 1, this.c);
-      m.leg.setColorAt(i * 2, this.c);
-      m.leg.setColorAt(i * 2 + 1, this.c);
-
-      const gy = groundHeight(s.pos.x, s.pos.z) + 0.02;
-      const air = Math.max(0, s.pos.y + lift - gy);
-      const lying = Math.abs(Math.sin(s.fall));
-      const w = (0.9 + lying * 0.4) * sc * Math.max(0.3, 1 - air * 0.3);
-      tmpQ.setFromAxisAngle(tmpV.set(0, 1, 0), s.yaw);
-      const off = tmpS.set(0, 0, Math.sign(s.fall) * lying * 0.8).applyQuaternion(tmpQ);
-      tmp.compose(at.set(s.pos.x + off.x, gy, s.pos.z + off.z), tmpQ, size.set(w, 1, w * (1 + lying * 1.4)));
-      this.shadows.setMatrixAt(i, tmp);
+      // The shadow runs from the feet to the head, so a body lying flat casts a long one.
+      s.middle(a);
+      b.setFromMatrixPosition(s.bones.head.matrixWorld);
+      const gy = groundHeight(a.x, a.z) + 0.02;
+      const air = Math.max(0, Math.min(a.y, b.y) - gy - 0.3);
+      const dx = b.x - s.pos.x;
+      const dz = b.z - s.pos.z;
+      const len = Math.hypot(dx, dz);
+      const w = 1.05 * sc * Math.max(0.3, 1 - air * 0.3);
+      tmpQ.setFromAxisAngle(UP, Math.atan2(dx, dz));
+      m.compose(tmpV.set((s.pos.x + b.x) / 2, gy, (s.pos.z + b.z) / 2), tmpQ, tmpS.set(w, 1, Math.max(w, len * 1.25)));
+      this.shadows.setMatrixAt(i, show ? m : zero);
     }
-    for (const mesh of Object.values(m)) {
+    for (const mesh of [this.helmets.me, this.helmets.opp, this.rifles, this.bands, this.shadows]) {
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
-    this.shadows.instanceMatrix.needsUpdate = true;
   }
 
   squad(side) {
@@ -543,11 +595,38 @@ export class Army {
   reset() {
     for (const s of this.soldiers) {
       s.respawn(0);
-      s.t = 10;
       s.pos.copy(s.home);
       s.set("idle");
-      s.scale = 1;
       s.aiming = false;
+      s.stance(0);
     }
   }
+}
+
+// A field dressing: a cream band with a red cross on the front.
+function bandage() {
+  const parts = [
+    [new THREE.CylinderGeometry(1, 1, 0.34, 20, 1, true), BAND],
+    [new THREE.BoxGeometry(0.34, 0.1, 0.06).translate(0, 0, 1.01), CROSS],
+    [new THREE.BoxGeometry(0.1, 0.34, 0.06).translate(0, 0, 1.01), CROSS],
+  ].map(([g, hex]) => {
+    const out = g.toNonIndexed();
+    const c = new THREE.Color(hex);
+    const n = out.attributes.position.count;
+    const col = new Uint8Array(n * 3);
+    for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b].map((v) => Math.round(v * 255)), i * 3);
+    out.setAttribute("color", new THREE.BufferAttribute(col, 3, true));
+    out.deleteAttribute("uv");
+    return out;
+  });
+  return mergeGeometries(parts);
+}
+
+// The band sits under the helmet's brim, sized to the head it wraps.
+function bandPlace(helmet) {
+  const box = new THREE.Box3().setFromBufferAttribute(helmet.mesh.geometry.attributes.position);
+  const c = box.getCenter(new THREE.Vector3()).applyMatrix4(helmet.attach);
+  const s = box.getSize(new THREE.Vector3()).multiply(helmet.mesh.scale);
+  const r = Math.min(s.x, s.z) * 0.4;
+  return new THREE.Matrix4().compose(new THREE.Vector3(c.x, c.y - s.y * 0.3, c.z), new THREE.Quaternion(), new THREE.Vector3(r, r, r));
 }

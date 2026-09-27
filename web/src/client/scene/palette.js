@@ -5,7 +5,6 @@ export const SIDES = {
 
 export const COLORS = {
   ink: 0x17171b,
-  sandbag: 0xa38c62,
   metal: 0x2a2a2e,
   wood: 0x6b4a2e,
   sky: { top: 0x0c1024, mid: 0x3d2138, horizon: 0xe07a48, sun: 0xffd6a4 },

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { gsap } from "gsap";
+import { gsap } from "gsap/gsap-core";
 import GEO from "./logo-geometry.json";
 import { skullShape, bandageShapes } from "./symbols.js";
 
@@ -90,10 +90,15 @@ export class LogoHud {
   constructor(stage) {
     this.stage = stage;
     this.scene = new THREE.Scene();
-    const pm = new THREE.PMREMGenerator(stage.renderer);
-    this.scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+    const env = () => {
+      const pm = new THREE.PMREMGenerator(stage.renderer);
+      this.envRT = pm.fromScene(new RoomEnvironment(), 0.04);
+      this.scene.environment = this.envRT.texture;
+      pm.dispose();
+    };
+    env();
+    stage.restores.push(env);
     this.scene.environmentIntensity = 0.55;
-    pm.dispose();
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.55));
     const sun = new THREE.DirectionalLight(0xffffff, 3.4);
     sun.position.set(-4, 3, -6);

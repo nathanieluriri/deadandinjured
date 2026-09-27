@@ -1,7 +1,10 @@
 import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
+import { mergeGeometries as mergeIndexed } from "three/addons/utils/BufferGeometryUtils.js";
 import { merge as mergeGeometries } from "./merge.js";
-import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { SIDES, COLORS, groundHeight, fbm } from "./palette.js";
+import { skullShape, bandageShapes } from "./symbols.js";
 
 const SUN = new THREE.Vector3(-0.52, 0.1, -1).normalize();
 
@@ -43,6 +46,50 @@ function lin(hex) {
   return new THREE.Color(hex);
 }
 
+// Each side's colours: the enemy fly a skull, your squad the field dressing.
+function flagCloth(side) {
+  const c = document.createElement("canvas");
+  c.width = 256;
+  c.height = 160;
+  const x = c.getContext("2d");
+  const mine = side === SIDES.me;
+  const field = `#${new THREE.Color(side.flag).getHexString()}`;
+  const ink = mine ? "#2b2622" : "#f2e8d8";
+  x.fillStyle = field;
+  x.fillRect(0, 0, 256, 160);
+  x.fillStyle = ink;
+  x.fillRect(0, 12, 256, 9);
+  x.fillRect(0, 139, 256, 9);
+  const draw = (shape, cx, cy, k, color, rot = 0) => {
+    x.save();
+    x.translate(cx, cy);
+    x.rotate(rot);
+    x.scale(k, -k);
+    x.beginPath();
+    for (const path of [shape, ...shape.holes]) {
+      path.getPoints(12).forEach((p, i) => (i ? x.lineTo(p.x, p.y) : x.moveTo(p.x, p.y)));
+      x.closePath();
+    }
+    x.fillStyle = color;
+    x.fill("evenodd");
+    x.restore();
+  };
+  if (mine) {
+    const { strip, pad } = bandageShapes();
+    draw(strip, 128, 80, 118, "#d7462c", -0.72);
+    draw(pad, 128, 80, 118, ink, -0.72);
+  } else draw(skullShape(), 128, 82, 118, ink);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
+export async function loadProps(url) {
+  const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(url);
+  return gltf.scene;
+}
+
 export class World {
   constructor(stage) {
     this.stage = stage;
@@ -74,9 +121,9 @@ export class World {
     scene.add(this.hemi, this.sun, this.fill, this.flash);
 
     this.environment();
+    stage.restores.push(() => this.environment(true));
     this.terrain();
     this.mountains();
-    this.sandbags();
     this.wire();
     this.trees();
     this.flags = { me: this.flag(SIDES.me), opp: this.flag(SIDES.opp) };
@@ -85,7 +132,8 @@ export class World {
     stage.hooks.push((dt) => this.update(dt));
   }
 
-  environment() {
+  // After a context loss the old target's GL objects are already gone, so it is dropped, not disposed.
+  environment(restored = false) {
     const r = this.stage.renderer;
     const pm = new THREE.PMREMGenerator(r);
     const envScene = new THREE.Scene();
@@ -93,44 +141,69 @@ export class World {
     envScene.add(sky);
     const ground = new THREE.Mesh(new THREE.CircleGeometry(9, 24).rotateX(-Math.PI / 2).translate(0, -1.2, 0), new THREE.MeshBasicMaterial({ color: 0x2b2519 }));
     envScene.add(ground);
-    this.scene.environment = pm.fromScene(envScene, 0.035).texture;
+    if (!restored) this.envRT?.dispose();
+    this.envRT = pm.fromScene(envScene, 0.035);
+    this.scene.environment = this.envRT.texture;
     this.scene.environmentIntensity = 0.55;
     pm.dispose();
+    sky.geometry.dispose();
+    ground.geometry.dispose();
+    ground.material.dispose();
   }
 
+  // The ground: an indexed grid, dense where the fighting is and coarse toward the hills, lit flat
+  // so every facet shows, and coloured by height, slope and closeness to the lines.
   terrain() {
-    const W = 280;
-    const D = 240;
-    const geo = new THREE.PlaneGeometry(W, D, 140, 120);
-    geo.rotateX(-Math.PI / 2);
-    geo.translate(0, 0, -20);
-    const pos = geo.attributes.position;
-    for (let i = 0; i < pos.count; i++) pos.setY(i, groundHeight(pos.getX(i), pos.getZ(i)));
-    const flat = geo.toNonIndexed();
-    flat.computeVertexNormals();
-    const p = flat.attributes.position;
-    const n = flat.attributes.normal;
-    const col = new Float32Array(p.count * 3);
+    const NX = 112;
+    const NZ = 96;
+    const warp = (u) => 0.42 * u + 0.58 * Math.sign(u) * u * u;
+    const xs = Array.from({ length: NX + 1 }, (_, i) => warp((i / NX) * 2 - 1) * 140);
+    const zs = Array.from({ length: NZ + 1 }, (_, i) => {
+      const v = (i / NZ) * 2 - 1;
+      return -8 + warp(v) * (v < 0 ? 132 : 108);
+    });
+    const count = (NX + 1) * (NZ + 1);
+    const pos = new Float32Array(count * 3);
+    const col = new Uint8Array(count * 3);
     const olive = lin(0x434326);
     const khaki = lin(0x77703f);
     const mud = lin(0x3f2d1f);
     const rock = lin(0x4c4239);
     const c = new THREE.Color();
-    for (let i = 0; i < p.count; i += 3) {
-      const x = (p.getX(i) + p.getX(i + 1) + p.getX(i + 2)) / 3;
-      const y = (p.getY(i) + p.getY(i + 1) + p.getY(i + 2)) / 3;
-      const z = (p.getZ(i) + p.getZ(i + 1) + p.getZ(i + 2)) / 3;
-      const slope = 1 - n.getY(i);
-      c.copy(olive).lerp(khaki, fbm(x * 0.18, z * 0.18, 2) * 0.9);
-      const nearLine = Math.max(0, 1 - Math.min(Math.abs(z - SIDES.me.z), Math.abs(z - SIDES.opp.z)) / 5) * (Math.abs(x) < 10 ? 1 : 0);
-      if (y < -0.3) c.lerp(mud, 0.85);
-      else c.lerp(mud, nearLine * 0.55 + (Math.abs(x) < 9 && z < 2 && z > -14 ? 0.3 : 0));
-      c.lerp(rock, Math.min(1, slope * 2.2));
-      c.multiplyScalar(0.92 + fbm(x * 1.7, z * 1.7, 1) * 0.16);
-      for (let k = 0; k < 3; k++) c.toArray(col, (i + k) * 3);
+    let k = 0;
+    for (const z of zs) {
+      for (const x of xs) {
+        const y = groundHeight(x, z);
+        const gx = groundHeight(x + 0.5, z) - groundHeight(x - 0.5, z);
+        const gz = groundHeight(x, z + 0.5) - groundHeight(x, z - 0.5);
+        const slope = 1 - 1 / Math.sqrt(1 + gx * gx + gz * gz);
+        c.copy(olive).lerp(khaki, fbm(x * 0.18, z * 0.18, 2) * 0.9);
+        const nearLine = Math.max(0, 1 - Math.min(Math.abs(z - SIDES.me.z), Math.abs(z - SIDES.opp.z)) / 5) * (Math.abs(x) < 10 ? 1 : 0);
+        if (y < -0.3) c.lerp(mud, 0.85);
+        else c.lerp(mud, nearLine * 0.55 + (Math.abs(x) < 9 && z < 2 && z > -14 ? 0.3 : 0));
+        c.lerp(rock, Math.min(1, slope * 2.2));
+        c.multiplyScalar(0.92 + fbm(x * 1.7, z * 1.7, 1) * 0.16);
+        pos.set([x, y, z], k * 3);
+        col.set([c.r, c.g, c.b].map((v) => Math.min(255, Math.round(v * 255))), k * 3);
+        k++;
+      }
     }
-    flat.setAttribute("color", new THREE.BufferAttribute(col, 3));
-    this.ground = new THREE.Mesh(flat, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+    const idx = new Uint16Array(NX * NZ * 6);
+    let n = 0;
+    for (let j = 0; j < NZ; j++) {
+      for (let i = 0; i < NX; i++) {
+        const a = j * (NX + 1) + i;
+        const b = a + NX + 1;
+        idx.set([a, b, a + 1, a + 1, b, b + 1], n);
+        n += 6;
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute("color", new THREE.BufferAttribute(col, 3, true));
+    geo.setIndex(new THREE.BufferAttribute(idx, 1));
+    geo.computeBoundingSphere();
+    this.ground = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
     this.scene.add(this.ground);
   }
 
@@ -140,53 +213,107 @@ export class World {
       { z: -175, h: 52, color: 0x3a2229, seed: 7 },
       { z: -230, h: 70, color: 0x4d2a2c, seed: 13 },
     ];
+    const pts = [];
+    const cols = [];
+    const idx = [];
+    const c = new THREE.Color();
     for (const L of layers) {
       const seg = 90;
       const w = 900;
-      const pts = [];
-      const idx = [];
+      const base = pts.length / 3;
+      c.setHex(L.color);
       for (let i = 0; i <= seg; i++) {
         const x = -w / 2 + (w * i) / seg;
         const peak = Math.pow(fbm(i * 0.11 + L.seed, L.seed, 4), 1.6) * L.h * 1.6 + 4;
         pts.push(x, peak, L.z + Math.sin(i * 0.7 + L.seed) * 6, x, -10, L.z);
+        cols.push(c.r, c.g, c.b, c.r, c.g, c.b);
         if (i < seg) {
-          const a = i * 2;
+          const a = base + i * 2;
           idx.push(a, a + 1, a + 2, a + 2, a + 1, a + 3);
         }
       }
-      const g = new THREE.BufferGeometry();
-      g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
-      g.setIndex(idx);
-      const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: L.color, fog: true }));
-      m.renderOrder = -5;
-      this.scene.add(m);
     }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+    g.setAttribute("color", new THREE.Float32BufferAttribute(cols, 3));
+    g.setIndex(idx);
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }));
+    m.renderOrder = -5;
+    this.scene.add(m);
   }
 
-  sandbags() {
-    const bag = new RoundedBoxGeometry(0.92, 0.3, 0.5, 2, 0.12);
+  // Set dressing from the soldiers' own kit, merged into one static mesh: a sandbag parapet in
+  // front of each squad, supplies by each code crate, barrels by each gun, and the wreckage of
+  // earlier fighting out in no man's land.
+  dress(props) {
     const list = [];
-    for (const s of [SIDES.me, SIDES.opp]) {
-      const z = s.z - s.dir * 1.15;
-      for (let row = 0; row < 2; row++) {
-        const n = row === 0 ? 12 : 11;
-        for (let i = 0; i < n; i++) {
-          const x = -5.9 + i * 1.0 + (row ? 0.5 : 0) + (Math.random() - 0.5) * 0.08;
-          list.push([x, 0.15 + row * 0.28, z + (Math.random() - 0.5) * 0.08, (Math.random() - 0.5) * 0.2]);
-        }
-      }
+    const put = (name, x, z, yaw = 0, s = 1, o = {}) => list.push({ name, x, z, yaw, s, ...o });
+    const jit = (a) => (Math.random() - 0.5) * a;
+    for (const side of [SIDES.me, SIDES.opp]) {
+      const f = side.dir;
+      const zp = side.z - f * 1.3;
+      for (let i = 0; i < 6; i++) put("sacks", -5.45 + i * 2.18, zp + jit(0.16), side.face + jit(0.08), [0.66, 0.56, 0.62], { tint: 0.14 });
+      put("sacksSmall", -7.2, zp + f * 0.85, side.face + f * 1.05, [0.66, 0.56, 0.62], { tint: 0.14 });
+      put("sacksSmall", 7.2, zp + f * 0.85, side.face - f * 1.05, [0.66, 0.56, 0.62], { tint: 0.14 });
+      const zc = side.z + f * 4.35;
+      put("pallet", -4.3, zc + f * 0.2, 0.15 * f, 0.95);
+      put("crate", -4.55, zc + f * 0.05, 0.25 + jit(0.2), 0.95, { y: 0.18 });
+      put("crate", -4.45, zc + f * 0.1, -0.2 + jit(0.3), 0.9, { y: 0.93 });
+      put("crate", -3.65, zc + f * 0.55, 0.6 + jit(0.3), 0.85, { y: 0.18 });
+      put("medkit", 3.1, zc - f * 0.1, side.face + 0.4, 0.8);
+      put("barrel", 7.4, side.z + f * 1.3, Math.random() * 6, 0.95);
+      put("barrel", 8.15, side.z + f * 2.05, Math.random() * 6, 0.95);
+      put("barrel", 7.65, side.z + f * 2.9, 1.2, 0.95, { tilt: [0, 0, Math.PI / 2], y: 0.39 });
     }
-    const mesh = new THREE.InstancedMesh(bag, new THREE.MeshLambertMaterial({ color: COLORS.sandbag }), list.length);
+    put("tank", -12.4, -7.5, 0.95, 1.35, { tilt: [0.1, 0, -0.07], y: -0.4 });
+    put("debris", 6.2, -3.4, 1.2, 1.1);
+    put("debris", -5.5, -11.2, 2.6, 0.95);
+    put("palletBroken", 10.2, -10.5, 0.7, 1);
+    put("palletBroken", -9.2, 1.5, 2.2, 0.9);
+    put("mine", 2.8, -8.6, 0.3, 0.6);
+    put("mine", -7.6, -3.8, 1.1, 0.6);
+    put("mine", 9.4, -4.4, 2.3, 0.6);
+
+    const src = {};
+    props.traverse((o) => {
+      if (!o.isMesh) return;
+      o.updateMatrix();
+      const g = new THREE.BufferGeometry();
+      for (const k of ["position", "normal", "color"]) {
+        const a = o.geometry.attributes[k];
+        const out = new Float32Array(a.count * 3);
+        for (let i = 0; i < a.count; i++) out.set([a.getX(i), a.getY(i), a.getZ(i)], i * 3);
+        g.setAttribute(k, new THREE.BufferAttribute(out, 3));
+      }
+      g.setIndex(o.geometry.index);
+      src[o.name] = g.applyMatrix4(o.matrix);
+    });
+
+    const parts = [];
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
-    const c = new THREE.Color();
-    list.forEach(([x, y, z, r], i) => {
-      q.setFromEuler(new THREE.Euler(0, r, (Math.random() - 0.5) * 0.12));
-      m.compose(new THREE.Vector3(x, y + groundHeight(x, z) * 0, z), q, new THREE.Vector3(1, 1 + Math.random() * 0.15, 1));
-      mesh.setMatrixAt(i, m);
-      mesh.setColorAt(i, c.setHex(COLORS.sandbag).multiplyScalar(0.85 + Math.random() * 0.3));
-    });
-    this.scene.add(mesh);
+    const e = new THREE.Euler();
+    for (const p of list) {
+      const t = p.tilt || [0, 0, 0];
+      e.set(t[0], p.yaw, t[2], "YXZ");
+      q.setFromEuler(e);
+      const sc = Array.isArray(p.s) ? p.s : [p.s, p.s, p.s];
+      m.compose(new THREE.Vector3(p.x, groundHeight(p.x, p.z) + (p.y || 0), p.z), q, new THREE.Vector3(...sc));
+      const g = src[p.name].clone().applyMatrix4(m);
+      if (p.tint) {
+        const c = g.attributes.color;
+        const k = 1 + (Math.random() - 0.5) * p.tint;
+        for (let i = 0; i < c.array.length; i++) c.array[i] *= k;
+      }
+      parts.push(g);
+    }
+    const merged = mergeIndexed(parts);
+    const col = merged.attributes.color.array;
+    const bytes = new Uint8Array(col.length);
+    for (let i = 0; i < col.length; i++) bytes[i] = Math.min(255, Math.round(col[i] * 255));
+    merged.setAttribute("color", new THREE.BufferAttribute(bytes, 3, true));
+    this.props = new THREE.Mesh(merged, new THREE.MeshLambertMaterial({ vertexColors: true }));
+    this.scene.add(this.props);
   }
 
   wire() {
@@ -251,9 +378,12 @@ export class World {
     const x = -5.6;
     const z = side.z + side.dir * 0.5;
     g.position.set(x, 0, z);
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 3.6, 6).translate(0, 1.8, 0), new THREE.MeshStandardMaterial({ color: COLORS.wood, roughness: 0.8 }));
+    const pole = new THREE.Mesh(
+      mergeGeometries([new THREE.CylinderGeometry(0.035, 0.045, 3.6, 6).translate(0, 1.8, 0), new THREE.SphereGeometry(0.075, 10, 8).translate(0, 3.64, 0)]),
+      new THREE.MeshStandardMaterial({ color: COLORS.wood, roughness: 0.8 }),
+    );
     const cloth = new THREE.PlaneGeometry(1.3, 0.82, 12, 6).translate(0.65, 0, 0);
-    const mat = new THREE.MeshStandardMaterial({ color: side.flag, roughness: 0.85, side: THREE.DoubleSide });
+    const mat = new THREE.MeshStandardMaterial({ map: flagCloth(side), roughness: 0.85, side: THREE.DoubleSide });
     const mesh = new THREE.Mesh(cloth, mat);
     mesh.position.y = 3.15;
     mesh.rotation.y = side.dir > 0 ? 0 : Math.PI;

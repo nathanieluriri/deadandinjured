@@ -13,7 +13,11 @@
     "three": "^0.186.1"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.5.0",
+    "@gltf-transform/extensions": "^4.5.0",
+    "@gltf-transform/functions": "^4.5.0",
     "esbuild": "^0.28.2",
+    "meshoptimizer": "^1.3.0",
     "wrangler": "^4.141.0"
   }
 }

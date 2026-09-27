@@ -1,8 +1,8 @@
 import * as THREE from "three";
-import { merge as mergeGeometries } from "./merge.js";
-import { gsap } from "gsap";
+import { gsap } from "gsap/gsap-core";
 import { SIDES, groundHeight } from "./palette.js";
 import { glyph, word, clay, CodeBlocks } from "./type3d.js";
+import { buildRps } from "./rps.js";
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const wait = (s) => new Promise((r) => gsap.delayedCall(s, r));
@@ -67,7 +67,7 @@ export class Director {
     stage.hooks.push((dt) => this.update(dt));
     stage.onResize = () => this.applyShot(this.name, true);
     army.on("landed", (s) => {
-      fx.dust(s.pos.clone(), 7, 1.1);
+      fx.dust(s.middle().setY(s.pos.y), 7, 1.1);
       sfx.play("thud", { pan: this.pan(s.pos), far: this.far(s.pos) });
     });
     army.on("risen", (s) => fx.dust(s.pos.clone(), 4, 0.7));
@@ -232,44 +232,7 @@ export class Director {
   // ---- The supply draw -------------------------------------------------------------------
 
   buildRps() {
-    const make = (side) => {
-      const mat = clay(SIDES[side].clay, 0.5);
-      const rockGeo = new THREE.IcosahedronGeometry(0.72, 1);
-      const p = rockGeo.attributes.position;
-      for (let i = 0; i < p.count; i++) {
-        const v = V(p.getX(i), p.getY(i), p.getZ(i));
-        v.multiplyScalar(0.86 + Math.abs(Math.sin(v.x * 7.1 + v.y * 5.3 + v.z * 3.7)) * 0.24);
-        p.setXYZ(i, v.x, v.y, v.z);
-      }
-      rockGeo.computeVertexNormals();
-      const rock = new THREE.Mesh(rockGeo, new THREE.MeshStandardMaterial({ color: SIDES[side].clay, roughness: 0.7, flatShading: true }));
-      const paperGeo = new THREE.BoxGeometry(1.15, 1.5, 0.05, 8, 10, 1);
-      const pp = paperGeo.attributes.position;
-      for (let i = 0; i < pp.count; i++) pp.setZ(i, pp.getZ(i) + Math.sin(pp.getX(i) * 2.2) * 0.14 + Math.sin(pp.getY(i) * 1.6) * 0.06);
-      paperGeo.computeVertexNormals();
-      const paper = new THREE.Mesh(paperGeo, mat);
-      const blade = mergeGeometries([
-        new THREE.BoxGeometry(0.13, 1.25, 0.045).translate(0, 0.5, 0),
-        new THREE.TorusGeometry(0.22, 0.055, 8, 20).translate(0, -0.33, 0),
-      ]);
-      const scissors = new THREE.Group();
-      const b1 = new THREE.Mesh(blade, mat);
-      const b2 = new THREE.Mesh(blade, mat);
-      b1.rotation.z = 0.32;
-      b2.rotation.z = -0.32;
-      b2.position.z = 0.05;
-      scissors.add(b1, b2);
-      const fist = new THREE.Mesh(new THREE.SphereGeometry(0.62, 20, 14), mat);
-      const g = new THREE.Group();
-      for (const o of [rock, paper, scissors, fist]) {
-        o.visible = false;
-        g.add(o);
-      }
-      g.visible = false;
-      this.stage.scene.add(g);
-      return { group: g, rock, paper, scissors, fist, blades: [b1, b2] };
-    };
-    return { me: make("me"), opp: make("opp") };
+    return buildRps(this.stage.scene, SIDES);
   }
 
   rpsShow(on) {

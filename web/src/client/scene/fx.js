@@ -125,16 +125,18 @@ class Sprites {
 
   update(dt) {
     let n = 0;
-    const out = [];
-    for (const p of this.list) {
+    let keep = 0;
+    const list = this.list;
+    for (let k = 0; k < list.length; k++) {
+      const p = list[k];
       if (p.delay > 0) {
         p.delay -= dt;
-        out.push(p);
+        list[keep++] = p;
         continue;
       }
       p.age += dt;
       if (p.age >= p.life) continue;
-      out.push(p);
+      list[keep++] = p;
       p.vel.y -= p.grav * dt;
       p.vel.multiplyScalar(Math.exp(-p.drag * dt));
       p.pos.addScaledVector(p.vel, dt);
@@ -152,12 +154,14 @@ class Sprites {
       this.aSize.array[n * 2 + 1] = p.rot;
       n++;
     }
-    this.list = out;
+    list.length = keep;
     this.geo.instanceCount = n;
     if (n) {
-      this.aPos.needsUpdate = true;
-      this.aCol.needsUpdate = true;
-      this.aSize.needsUpdate = true;
+      for (const [a, k] of [[this.aPos, 3], [this.aCol, 4], [this.aSize, 2]]) {
+        a.clearUpdateRanges();
+        a.addUpdateRange(0, n * k);
+        a.needsUpdate = true;
+      }
     }
   }
 }
@@ -338,8 +342,12 @@ export class Fx {
       }
     }
     let n = 0;
-    for (const c of this.chunks) {
+    let keep = 0;
+    const chunks = this.chunks;
+    for (let k = 0; k < chunks.length; k++) {
+      const c = chunks[k];
       c.age += dt;
+      if (c.age < 5.5) chunks[keep++] = c;
       if (!c.rest) {
         c.vel.y -= 16 * dt;
         c.pos.addScaledVector(c.vel, dt);
@@ -364,7 +372,7 @@ export class Fx {
       this.debris.setColorAt(n, c.color);
       n++;
     }
-    this.chunks = this.chunks.filter((c) => c.age < 5.5);
+    chunks.length = keep;
     this.debris.count = n;
     if (n) {
       this.debris.instanceMatrix.needsUpdate = true;

@@ -1,7 +1,7 @@
-import { gsap } from "gsap";
+import { gsap } from "gsap/gsap-core";
 import { Stage } from "./scene/stage.js";
-import { World } from "./scene/world.js";
-import { Army } from "./scene/army.js";
+import { World, loadProps } from "./scene/world.js";
+import { Army, loadSoldier } from "./scene/army.js";
 import { Fx } from "./scene/fx.js";
 import { Director } from "./scene/director.js";
 import { LogoHud } from "./scene/logo.js";
@@ -50,6 +50,9 @@ class App {
   }
 
   async boot() {
+    const soldier = loadSoldier(SOLDIER_URL);
+    const props = loadProps(PROPS_URL);
+    for (const p of [soldier, props]) p.catch(() => {});
     if (/[?&]film\b/.test(location.search)) document.documentElement.classList.add("film");
     grain();
     this.progress(0.08);
@@ -61,9 +64,10 @@ class App {
     if (iconMode) return this.icon(iconMode[1] === "injured" ? "injured" : "dead");
     $("pre").classList.add("live");
     this.world = new World(this.stage);
+    this.world.dress(await props);
     this.progress(0.4);
     await frame();
-    this.army = new Army(this.stage);
+    this.army = new Army(this.stage, await soldier);
     this.fx = new Fx(this.stage, this.world);
     this.sfx = new Sfx();
     this.progress(0.6);
@@ -164,7 +168,7 @@ class App {
         if (b.classList.contains("phase-deploy") || b.classList.contains("phase-battle")) bottom = dock.getBoundingClientRect().height * (innerWidth < 900 ? 0.9 : 0.55);
         else if (b.classList.contains("phase-supply")) bottom = $("rps").getBoundingClientRect().height + 20;
         else if (b.classList.contains("phase-over")) bottom = innerWidth < 900 ? 220 : 0;
-        top = innerWidth < 900 ? 90 : 40;
+        top = innerWidth < 900 ? 100 : 50;
       } else if (this.screen === "menu") {
         bottom = innerWidth < 900 ? Math.min(330, innerHeight * 0.42) : 0;
       } else if (this.screen === "wait" || this.screen === "search") bottom = innerWidth < 900 ? 280 : 120;

@@ -1,4 +1,4 @@
-import { gsap } from "gsap";
+import { gsap } from "gsap/gsap-core";
 import { isCode, randomCode } from "../shared/rules.js";
 import { TIMES } from "../shared/game.js";
 

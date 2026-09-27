@@ -41,6 +41,8 @@ console.log("quick match paired", names.join(" vs "));
 const pw = `pw-${tag}-secret`;
 const secured = await a.evaluate(async (password) => (await fetch("/api/password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) })).json(), pw);
 if (!secured.player?.secured) fail("password not saved");
+// The paired browsers are done; closing them keeps a software-rendered run from starving the next one.
+for (const p of [a, b]) await p.context().close();
 const c = await open();
 const bad = await c.evaluate(async (name) => (await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, password: "wrong-password" }) })).status, `Quick${tag}A`);
 if (bad !== 401) fail(`wrong password gave ${bad}`);
