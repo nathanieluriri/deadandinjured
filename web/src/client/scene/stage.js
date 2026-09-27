@@ -20,8 +20,9 @@ export class Stage {
     this.hooks = [];
     this.restores = [];
     this.timeScale = 1;
-    this.inset = { top: 0, bottom: 0 };
+    this.inset = { top: 0, bottom: 0, side: 0 };
     this.view = 0;
+    this.viewX = 0;
     this.time = 0;
     this.frames = [];
     this.good = 0;
@@ -42,7 +43,7 @@ export class Stage {
   }
 
   get aspect() {
-    return innerWidth / Math.max(1, innerHeight - this.inset.bottom * 0.6);
+    return Math.max(1, innerWidth - this.inset.side * 0.6) / Math.max(1, innerHeight - this.inset.bottom * 0.6);
   }
 
   resize() {
@@ -51,9 +52,10 @@ export class Stage {
     this.onResize?.();
   }
 
-  setInset(top, bottom, glide = false) {
-    if (top === this.inset.top && bottom === this.inset.bottom) return;
-    this.inset = { top, bottom };
+  // `side` is taken from the right, for a sheet standing beside the scene.
+  setInset(top, bottom, glide = false, side = 0) {
+    if (top === this.inset.top && bottom === this.inset.bottom && side === this.inset.side) return;
+    this.inset = { top, bottom, side };
     this.glide = glide && !matchMedia("(prefers-reduced-motion: reduce)").matches;
     this.offset();
     this.onResize?.();
@@ -63,16 +65,20 @@ export class Stage {
   // eases there over half a second instead of jumping, for panels that arrive during a shot.
   offset(real = 0) {
     const to = (this.inset.bottom - this.inset.top) / 2;
+    const toX = this.inset.side / 2;
     const k = this.glide && real ? 1 - Math.exp(-real * 5) : this.glide ? 0 : 1;
     this.view += (to - this.view) * k;
-    if (Math.abs(to - this.view) < 0.5) {
+    this.viewX += (toX - this.viewX) * k;
+    if (Math.abs(to - this.view) < 0.5 && Math.abs(toX - this.viewX) < 0.5) {
       this.view = to;
+      this.viewX = toX;
       this.glide = false;
     }
     const w = innerWidth;
     const h = innerHeight;
     const shift = Math.round(this.view);
-    if (shift) this.camera.setViewOffset(w, h, 0, shift, w, h);
+    const shiftX = Math.round(this.viewX);
+    if (shift || shiftX) this.camera.setViewOffset(w, h, shiftX, shift, w, h);
     else this.camera.clearViewOffset();
     this.camera.updateProjectionMatrix();
   }

@@ -18,6 +18,7 @@ import { LEVELS } from "./ai.js";
 const $ = (id) => document.getElementById(id);
 const frame = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
 const fine = matchMedia("(pointer: fine)").matches;
+const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 async function api(path, body) {
   const r = await fetch(path, body === undefined ? { credentials: "same-origin" } : {
@@ -187,7 +188,7 @@ class App {
     this.network.live = name === "menu";
     this.layout();
     clearInterval(this.warTimer);
-    if (name === "menu") this.warTimer = setInterval(() => this.screen === "menu" && !document.hidden && this.director.distant(), 7000 + Math.random() * 6000);
+    if (name === "menu" && !reduced()) this.warTimer = setInterval(() => this.screen === "menu" && !document.hidden && this.director.distant(), 7000 + Math.random() * 6000);
   }
 
   // Every tool on the bar, the pause stud and the draw's hands get their clay object.
@@ -330,7 +331,7 @@ class App {
     note.hidden = !text;
     for (const [k, on] of [["effects", this.sfx.effects], ["music", this.sfx.music]]) document.querySelector(`[data-p="${k}"]`).setAttribute("aria-pressed", String(on));
     // Replaying the intro leaves the field, so it is offered only once a match is over.
-    $("introRow").hidden = !this.replayIntro || this.inMatch();
+    $("introRow").hidden = !this.replayIntro || this.inMatch() || reduced();
     document.querySelector('[data-p="quit"]').textContent = this.inMatch() ? "Quit game" : "Back to base";
   }
 
@@ -364,6 +365,7 @@ class App {
     requestAnimationFrame(() => {
       let bottom = 0;
       let top = 0;
+      let side = 0;
       const b = document.body;
       // A cinematic frames the whole screen and restores the layout when it ends.
       if (b.classList.contains("cine")) return;
@@ -379,12 +381,14 @@ class App {
           bottom = below ? innerHeight - $("over").getBoundingClientRect().top + 8 : bar;
         }
         top = innerWidth < 900 ? 100 : 50;
-      } else if (this.screen === "menu" && innerWidth < 900) {
-        // An open sheet takes the bottom of a phone, so the place moves up above it.
+      } else if (this.screen === "menu") {
+        // An open sheet takes the bottom of an upright phone, so the place moves up above it;
+        // anywhere else the sheet stands to the right and the place moves left of it.
         const sheet = [...document.querySelectorAll("#menu .sheet")].find((x) => !x.hidden);
-        bottom = sheet ? innerHeight - sheet.getBoundingClientRect().top : 0;
+        if (sheet && innerWidth < 900 && !matchMedia("(orientation: landscape)").matches) bottom = innerHeight - sheet.getBoundingClientRect().top;
+        else if (sheet) side = (innerWidth - sheet.getBoundingClientRect().left) * 0.8;
       }
-      this.stage.setInset(Math.round(top), Math.round(bottom), this.screen === "match" || this.screen === "menu");
+      this.stage.setInset(Math.round(top), Math.round(bottom), this.screen === "match" || this.screen === "menu", Math.round(side));
     });
   }
 
@@ -444,7 +448,7 @@ class App {
     const w = $("who");
     const p = this.me;
     this.network?.tally(p);
-    const intro = `<button type="button" class="link" data-act="intro">Replay the intro</button>`;
+    const intro = reduced() ? "" : `<button type="button" class="link" data-act="intro">Replay the intro</button>`;
     if (!p) {
       w.innerHTML = `<span>No callsign yet. You get one the first time you play someone live.</span><button type="button" class="link" data-act="signin">Sign in</button>${intro}`;
       return;

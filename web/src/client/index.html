@@ -47,9 +47,10 @@
 <main>
   <section class="screen menu" id="menu" aria-label="The trench">
     <h1 class="vh">Dead &amp; Injured, a live code-breaking war game</h1>
-    <div class="hots" id="hots"></div>
     <button type="button" class="back-tag" id="backBtn" hidden><span>Back</span></button>
-    <p class="slip" id="placeNote" role="status"></p>
+    <div class="hots" id="hots"></div>
+    <p class="slip" id="placeNote" aria-hidden="true"></p>
+    <p class="vh" id="placeSay" role="status"></p>
     <div class="sheets">
       <section class="sheet dossier" id="ordersSheet" hidden aria-label="Your orders">
         <div id="ordersForm"></div>

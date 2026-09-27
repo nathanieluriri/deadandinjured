@@ -88,7 +88,10 @@ export class Title {
   }
 
   bind() {
-    $("backBtn").addEventListener("click", () => this.back());
+    $("backBtn").addEventListener("click", (e) => {
+      this.keys = e.detail === 0;
+      this.back();
+    });
     $("ordersGo").addEventListener("click", () => this.ordersGo());
     $("joinForm").addEventListener("submit", (e) => {
       e.preventDefault();
@@ -103,7 +106,8 @@ export class Title {
       if (this.app.screen !== "menu" || document.querySelector("dialog[open]")) return;
       if (e.key === "Escape") {
         e.preventDefault();
-        this.back();
+        this.keys = true;
+        if (!this.closeSheet()) this.back();
       }
     });
     // Any click or key during the intro skips to its end; a click during a journey hurries it.
@@ -187,6 +191,7 @@ export class Title {
   }
 
   replayIntro() {
+    if (reduced()) return this.app.home();
     this.app.home();
     this.introing = true;
     requestAnimationFrame(() => this.intro());
@@ -259,6 +264,7 @@ export class Title {
     document.body.dataset.place = name;
     $("backBtn").hidden = !p.back;
     $("placeNote").textContent = p.note;
+    this.say(p.note);
     this.layHots(p.hot);
     this.onArrive(name);
     this.app.layout();
@@ -272,8 +278,32 @@ export class Title {
     if (name === "radio") this.app.quick();
     if (name === "board") this.roll();
     if (name === "corner") this.who();
+    // A keyboard or a screen reader carries on from the first object; so does a mouse.
     const first = this.hotEls[0]?.el;
-    if (first && matchMedia("(pointer: fine)").matches) first.focus({ preventScroll: true });
+    if (first && (this.keys || matchMedia("(pointer: fine)").matches)) first.focus({ preventScroll: true });
+    this.keys = false;
+  }
+
+  // Arrivals and rooms are read out from one status line that never leaves the page.
+  say(text) {
+    const s = $("placeSay");
+    s.textContent = "";
+    requestAnimationFrame(() => {
+      s.textContent = text;
+    });
+  }
+
+  // Esc first puts away a sheet taken out at this place, giving the focus back to its object.
+  closeSheet() {
+    const open = [["tagSheet", "tag"], ["dialSheet", "chalkboard"], ["joinSheet", "chalkboard"]].find(([id]) => !$(id).hidden);
+    if (!open) return false;
+    if (open[0] === "joinSheet") this.decline();
+    else {
+      $(open[0]).hidden = true;
+      this.app.layout();
+    }
+    this.hotEls.find((h) => h.key === open[1])?.el.focus({ preventScroll: true });
+    return true;
   }
 
   back() {
@@ -334,7 +364,10 @@ export class Title {
       el.setAttribute("aria-label", h.label);
       el.innerHTML = h.plank ? "" : `<span class="hot-tag">${h.tag || h.label}</span>`;
       if (h.toggle) el.setAttribute("aria-pressed", String(this.app.sfx.enabled));
-      el.addEventListener("click", () => this.use(h, el));
+      el.addEventListener("click", (e) => {
+        this.keys = e.detail === 0;
+        this.use(h, el);
+      });
       el.addEventListener("pointerenter", () => this.net.hover(h.key, true));
       el.addEventListener("pointerleave", () => this.net.hover(h.key, false));
       el.addEventListener("focus", () => this.net.hover(h.key, true));
@@ -345,21 +378,53 @@ export class Title {
     this.pin();
   }
 
-  // Each frame, every button sits over its object.
+  // Each frame, every button sits over its object: a plank's or a nameplate's button takes the
+  // object's own length and angle on screen, anything else is a round button under its tag.
+  // Where two overlap, the nearer object is on top.
   pin() {
     if (!this.hotEls.length) return;
     const cam = this.app.stage.camera;
-    const anchors = this.net.anchors;
+    const W = innerWidth;
+    const H = innerHeight;
+    const v = this.v;
+    const at = (p) => {
+      p.project(cam);
+      return [((p.x + 1) / 2) * W, ((1 - p.y) / 2) * H, p.z];
+    };
     for (const h of this.hotEls) {
-      const a = anchors[h.key];
+      const a = this.net.anchors[h.key];
       if (!a) continue;
-      const v = this.v.copy(a).project(cam);
-      const off = v.z > 1 || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1;
-      h.el.style.visibility = off ? "hidden" : "";
-      // Kept far enough in from the sides that the whole tag stays readable.
-      h.w ||= Math.max(h.el.offsetWidth, h.el.firstChild?.offsetWidth || 0) / 2 + 6;
-      const x = Math.min(innerWidth - h.w, Math.max(h.w, ((v.x + 1) / 2) * innerWidth));
-      h.el.style.transform = `translate(${x}px, ${((1 - v.y) / 2) * innerHeight}px)`;
+      const [ax, ay, az] = at(v.copy(a));
+      const off = az > 1 || ax < -0.05 * W || ax > 1.05 * W || ay < -0.05 * H || ay > 1.05 * H;
+      const st = h.el.style;
+      st.visibility = off ? "hidden" : "";
+      st.zIndex = String(Math.round((1 - az) * 1e5));
+      // Kept far enough in from the sides that a whole tag stays readable.
+      h.w ||= h.plank ? 0 : Math.max(h.el.offsetWidth, h.el.firstChild?.offsetWidth || 0) / 2 + 6;
+      const clamp = (x) => (h.w ? Math.min(W - h.w, Math.max(h.w, x)) : x);
+      const box = this.net.boxes[h.key];
+      if (!box) {
+        // Near the foot of the screen the tag hangs above its button instead.
+        const y = Math.min(H - 30, Math.max(30, ay));
+        h.el.classList.toggle("up", y > H - 72);
+        st.transform = `translate(${clamp(ax)}px, ${y}px)`;
+        continue;
+      }
+      const m = box.obj.matrixWorld;
+      const [x0, y0] = at(v.copy(box.a).applyMatrix4(m));
+      const [x1, y1] = at(v.copy(box.b).applyMatrix4(m));
+      const cx = (x0 + x1) / 2;
+      const cy = (y0 + y1) / 2;
+      const [ux, uy] = at(v.set((box.a.x + box.b.x) / 2, box.h, 0).applyMatrix4(m));
+      let turn = Math.atan2(y1 - y0, x1 - x0);
+      if (turn > Math.PI / 2) turn -= Math.PI;
+      if (turn < -Math.PI / 2) turn += Math.PI;
+      const w = Math.max(44, Math.hypot(x1 - x0, y1 - y0));
+      const t = Math.max(h.plank ? 24 : 44, 2 * Math.hypot(ux - cx, uy - cy));
+      st.width = `${w}px`;
+      st.height = `${t}px`;
+      st.margin = `${-t / 2}px 0 0 ${-w / 2}px`;
+      st.transform = `translate(${clamp(cx)}px, ${cy}px) rotate(${turn}rad)`;
     }
   }
 
@@ -449,6 +514,7 @@ export class Title {
     $("roomCode").textContent = code;
     for (const id of ["dialSheet", "joinSheet"]) $(id).hidden = true;
     $("waitSheet").hidden = false;
+    this.say(`Room open, code ${code.split("").join(" ")}`);
     this.app.layout();
   }
 
@@ -475,11 +541,12 @@ export class Title {
     const trip = this.trip;
     const room = await this.app.peekRoom(code);
     if (!room || trip !== this.trip || this.place !== "signals") return;
-    // Your own room's link (a reload while waiting): back to waiting in it, no invitation.
+    // Your own room's link (a reload): straight back in, waiting in the dugout if no one has come.
     const me = this.app.me?.name;
     if (me && room.host && room.host.toLowerCase() === me.toLowerCase() && !this.hosting) {
       this.app.openRoom(code);
-      return this.hosted(code);
+      if (room.phase === "lobby") this.hosted(code);
+      return;
     }
     this.joining = code;
     $("joinTg").innerHTML = `<p class="tg-head"><span>Field telegraph</span><em>Room ${code}</em></p><div class="tg-lines"><p><span class="tg-strip">${room.host ? `${escape(room.host)} invites you` : "You are invited"} to the field stop</span></p><p><span class="tg-strip">Orders ${escape(ordersLine(room.orders || {}))} stop</span></p></div>`;
@@ -503,6 +570,7 @@ export class Title {
     this.joining = null;
     $("joinSheet").hidden = true;
     this.app.layout();
+    this.hotEls.find((h) => h.key === "chalkboard")?.el.focus({ preventScroll: true });
   }
 
   hangUp() {

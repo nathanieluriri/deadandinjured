@@ -13,6 +13,7 @@ import { SIDES } from "./palette.js";
 // the walls are built up, breastwork style. Everything static merges into one mesh; the things a
 // player touches stay separate so they can move.
 const PI = Math.PI;
+const calm = matchMedia("(prefers-reduced-motion: reduce)");
 
 // Each place's anchor, in world metres (our line is at z 6, positive z is behind it).
 export const PLACES = {
@@ -103,6 +104,8 @@ export class Network {
     this.glass = [];
     this.touch = {};
     this.anchors = {};
+    // The objects whose buttons take their shape each frame: a mesh and its long axis, local.
+    this.boxes = {};
     this.swing = {};
     this.time = 0;
   }
@@ -286,6 +289,7 @@ export class Network {
       pivot.add(plank);
       this.group.add(pivot);
       this.touch[s.key] = pivot;
+      this.boxes[s.key] = { obj: plank, a: new THREE.Vector3(-0.08, 0, 0), b: new THREE.Vector3(L - 0.04, 0, 0), h: Hh };
       this.anchors[s.key] = new THREE.Vector3(0.72, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), s.yaw).add(pivot.position);
       return { ...s, pivot, plank };
     });
@@ -535,11 +539,11 @@ export class Network {
     this.put(tint(cyl(0.006, 0.006, 2.4, 4).rotateZ(1.2), K.metal), x + 0.95, 3.1, z + 1.6);
     const clip = new THREE.Group();
     clip.add(new THREE.Mesh(join([[box(0.32, 0.44, 0.02, 0.01), 0x6f4d2f], [box(0.28, 0.36, 0.01, 0.005).translate(0, -0.02, 0.012), K.paper], [box(0.12, 0.04, 0.03, 0.01).translate(0, 0.2, 0.02), K.metal]]), this.mat));
-    clip.position.set(x - 1.3, 1.35, z - 1.02);
+    clip.position.set(x + 1.3, 1.35, z - 1.02);
     this.group.add(clip);
     this.touch.clipboard = clip;
     this.anchors.clipboard = clip.position.clone();
-    this.lamp(x + 1.2, 2.0, z - 1.0);
+    this.lamp(x + 1.2, 2.05, z - 1.0);
   }
 
   // Nameplates for the enemy commanders, leant against the front of their parapet while the
@@ -565,7 +569,9 @@ export class Network {
       plate.position.set(-2.4 + i * 2.4, 0.4, -16.18);
       plate.rotation.x = -0.25;
       this.plates.add(plate);
-      this.anchors[["recruit", "sergeant", "general"][i]] = plate.position.clone();
+      const key = ["recruit", "sergeant", "general"][i];
+      this.anchors[key] = plate.position.clone();
+      this.boxes[key] = { obj: plate, a: new THREE.Vector3(-0.75, 0, 0), b: new THREE.Vector3(0.75, 0, 0), h: 0.2 };
     });
     this.plates.visible = false;
     this.group.add(this.plates);
@@ -699,6 +705,7 @@ export class Network {
 
   // A plank or a prop lifts or swings a little while it is pointed at.
   hover(key, on) {
+    if (on && !this.swing[key]) this.swingAt = { ...this.swingAt, [key]: this.time };
     this.swing[key] = on ? 1 : 0;
   }
 
@@ -722,14 +729,17 @@ export class Network {
       this.bannerRoll.visible = k < 1;
       this.bannerRoll.position.y = this.bannerTop - this.bannerH * e;
     }
+    // A plank pointed at swings once and settles, lifted.
     for (const s of this.signs || []) {
       const to = this.swing[s.key] || 0;
       s.k = (s.k || 0) + (to - (s.k || 0)) * (1 - Math.exp(-dt * 10));
-      s.plank.rotation.x = Math.sin(this.time * 7) * 0.05 * s.k;
+      const fade = calm.matches ? 0 : Math.exp(-(this.time - (this.swingAt?.[s.key] || 0)) * 2.5);
+      s.plank.rotation.x = Math.sin(this.time * 7) * 0.05 * s.k * fade;
       s.plank.position.y = s.k * 0.03;
     }
     const b = this.bannerMesh;
-    if (b && this.live) {
+    if (b && this.live && !(calm.matches && this.stillBanner)) {
+      this.stillBanner = calm.matches;
       const p = b.geometry.attributes.position;
       const base = this.bannerBase;
       const t = this.time;

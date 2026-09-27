@@ -6,6 +6,7 @@ import { buildRps } from "./rps.js";
 import { buildPlane } from "./plane.js";
 import { WhiteFlag } from "./whiteflag.js";
 
+const calm = matchMedia("(prefers-reduced-motion: reduce)");
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const wait = (s) => new Promise((r) => gsap.delayedCall(s, r));
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -20,13 +21,13 @@ const other = (side) => (side === "me" ? "opp" : "me");
 
 const SHOTS = {
   // The places of the trench network behind our left flank, framed where they are.
-  corner: { pos: [-11.0, 2.4, 14.8], look: [-14.8, 1.6, 6.8], fov: 50, kp: 1, narrow: { pos: [-14.7, 2.4, 16.5], look: [-15.55, 1.75, 7.0], fov: 58 } },
+  corner: { pos: [-11.0, 2.4, 14.8], look: [-14.8, 1.6, 6.8], fov: 50, kp: 1, narrow: { pos: [-14.7, 2.4, 16.5], look: [-15.55, 1.75, 7.0], fov: 58 }, short: { pos: [-13.3, 2.2, 12.6], look: [-15.2, 1.75, 7.4], fov: 46 } },
   board: { pos: [-14.9, 1.62, 7.75], look: [-17.05, 1.3, 8.75], fov: 46, kp: 1, narrow: { pos: [-13.4, 1.75, 8.0], look: [-17.05, 1.28, 8.9] } },
   manual: { pos: [-15.6, 1.45, 11.3], look: [-16.5, 0.62, 10.3], fov: 46, kp: 1 },
   war: { pos: [-13.6, 1.9, 17.2], look: [-13.2, 0.85, 20.3], fov: 58, kp: 1, narrow: { pos: [-13.5, 2.2, 17.25], look: [-13.25, 0.75, 20.0] } },
   signals: { pos: [-17.35, 1.66, 14.35], look: [-18.75, 1.3, 17.4], fov: 58, kp: 1, narrow: { pos: [-17.6, 1.7, 14.1], look: [-18.6, 1.35, 17.4], fov: 60 } },
   radio: { pos: [-9.6, 1.9, 22.4], look: [-9.6, 1.0, 26.6], fov: 52, kp: 1, narrow: { pos: [-9.6, 2.1, 21.9], look: [-9.6, 1.0, 26.4] } },
-  front: { pos: [0, 2.0, -9.6], look: [0, 1.3, -16.8], fov: 42, kp: 1, narrow: { pos: [0, 2.3, -3.2], look: [0, 1.3, -16.8] } },
+  front: { pos: [0, 2.0, -9.6], look: [0, 1.3, -16.8], fov: 42, kp: 1, narrow: { pos: [0, 2.6, 1.0], look: [0, 1.4, -16.8] } },
   home: { pos: [0, 4.4, 17.2], look: [0, 1.1, -5], fov: 40, kp: 1.45 },
   deploy: { pos: [0, 2.9, 15.4], look: [0, 1.05, 9.6], fov: 38 },
   supply: { pos: [0, 4.4, 2.6], look: [0, 4.4, -7], fov: 44, kp: 1.3 },
@@ -124,8 +125,10 @@ export class Director {
 
   shotFor(name) {
     const a = this.stage.aspect;
-    // A tall screen sees less to the sides, so some shots turn to keep their subject in frame.
-    const s = a < 0.9 && SHOTS[name].narrow ? { ...SHOTS[name], ...SHOTS[name].narrow } : SHOTS[name];
+    // A tall screen sees less to the sides, so some shots turn to keep their subject in frame; a
+    // short one (a phone on its side) has width to spare, so some come closer.
+    const S = SHOTS[name];
+    const s = a < 0.9 && S.narrow ? { ...S, ...S.narrow } : a > 1.3 && innerHeight < 500 && S.short ? { ...S, ...S.short } : S;
     const kp = s.kp || 1.7;
     const k = a < 0.62 ? kp : a < 0.9 ? 1 + (kp - 1) * 0.6 : a < 1.25 ? 1 + (kp - 1) * 0.23 : 1;
     const look = V(...s.look);
@@ -272,7 +275,7 @@ export class Director {
     this.shakeAmt *= Math.exp(-dt * 5);
     const t = this.time;
     if (this.follow) this.look.lerp(this.follow.position, 1 - Math.exp(-dt * 10));
-    const h = this.handheld;
+    const h = calm.matches ? 0 : this.handheld;
     const sx = (Math.sin(t * 31.1) + Math.sin(t * 17.3)) * 0.5 * this.shakeAmt * 0.35;
     const sy = (Math.sin(t * 27.7) + Math.sin(t * 13.9)) * 0.5 * this.shakeAmt * 0.35;
     this.cam.position.set(
@@ -280,7 +283,7 @@ export class Director {
       this.pos.y + Math.sin(t * 0.51) * 0.06 * h + sy,
       this.pos.z + Math.cos(t * 0.29) * 0.08 * h,
     );
-    const sw = this.sway;
+    const sw = calm.matches ? 0 : this.sway;
     this.cam.lookAt(this.look.x + sx * 0.4 + Math.sin(t * 1.7) * sw, this.look.y + sy * 0.4 + Math.sin(t * 2.3 + 1) * sw * 0.6, this.look.z);
     if (Math.abs(this.cam.fov - this.fov) > 0.01) {
       this.cam.fov = this.fov;
