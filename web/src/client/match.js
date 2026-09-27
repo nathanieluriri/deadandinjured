@@ -29,7 +29,7 @@ const KEYS = { a: "aim", r: "recon", s: "sniper", m: "smoke", l: "log", t: "chat
 // replay never stacks on a finished one.
 function play(el, frames, opts) {
   el.__anim?.cancel();
-  el.__anim = el.animate(frames, { fill: "forwards", ...opts, duration: reduced() ? 1 : opts.duration });
+  el.__anim = el.animate(frames, { fill: "forwards", ...opts, duration: reduced() ? 1 : opts.duration, delay: reduced() ? 0 : opts.delay || 0 });
   return el.__anim;
 }
 
@@ -39,7 +39,7 @@ export class MatchView {
     this.el = {};
     for (const id of ["note", "turn", "turnLabel", "timer", "meName", "oppName", "meCrates", "oppCrates", "oppDot", "slots", "pad", "fireBtn", "delBtn",
       "mineLog", "theirLog", "logCount", "logs", "logSeg", "rematchBtn", "homeBtn", "rematchLabel", "rematchSub", "verdict",
-      "telegram", "tgBody", "tgStatus", "tgOrders", "tgOrdersLine", "tgAmend", "tgForm", "ends",
+      "telegram", "tgBody", "tgStatus", "tgOrders", "tgOrdersLine", "tgAmend", "tgForm", "ends", "over",
       "rps", "stamp", "myCode", "taunts", "markBtn", "randomBtn", "recent", "bar", "tbSupplies", "tbCrates", "crateCount", "unread",
       "scope", "scopeTag", "say", "reticle", "reticleTag", "live", "clock"]) this.el[id] = $(id);
     this.windows = Object.fromEntries(["recon", "sniper", "smoke"].map((k) => [k, $(`w-${k}`)]));
@@ -69,7 +69,7 @@ export class MatchView {
     this.logView(store("di.log") || "mine");
     this.dir.on("scope", (o) => this.scope(o));
     this.dir.on("say", ({ soldier, text, ms }) => this.say(soldier, text, ms, "opp"));
-    this.dir.on("verdict", (v) => this.verdict(v));
+    this.dir.on("verdict", (v) => this.active && this.verdict(v));
     this.app.stage.hooks.push(() => this.pin());
     gsap.ticker.add(() => this.clock());
   }
@@ -161,10 +161,12 @@ export class MatchView {
       this.app.home();
     });
     e.tgAmend.addEventListener("click", () => this.amend());
+    e.over.addEventListener("scroll", () => this.scrollCue(), { passive: true });
+    new ResizeObserver(() => this.scrollCue()).observe(e.telegram);
     addEventListener("keydown", (ev) => {
       if (!this.active || document.querySelector("dialog[open]") || ev.metaKey || ev.ctrlKey || ev.altKey) return;
       const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
-      const phase = this.s?.phase;
+      const phase = this.ended ? "over" : this.s?.phase;
       const onBar = phase === "deploy" || phase === "battle";
       if (k === "Escape") {
         if (!onBar || !this.desk.escape()) this.app.pause();
@@ -281,6 +283,7 @@ export class MatchView {
   }
 
   stop() {
+    this.run = (this.run || 0) + 1;
     this.active = false;
     this.conn?.close();
     this.conn = null;
@@ -293,7 +296,13 @@ export class MatchView {
   }
 
   enqueue(fn) {
-    this.q = this.q.then(() => (this.active ? fn() : null)).catch((e) => console.error(e));
+    const run = this.run;
+    this.q = this.q.then(() => (this.active && this.run === run ? fn() : null)).catch((e) => console.error(e));
+  }
+
+  // The match has ended here, even while its final state is still on its way.
+  get ended() {
+    return !!this.result || this.s?.phase === "over";
   }
 
   // ---- incoming -----------------------------------------------------------------------------
@@ -317,6 +326,10 @@ export class MatchView {
       case "joined": if (!this.solo) this.app.toast(`${m.name} joined the room`); break;
       case "ready": this.sfx.play("lock", { far: 0.8 }); this.app.toast(`${this.oppName} has deployed their code`); break;
       case "rematch":
+        if (this.s?.rematch?.me) {
+          this.announce(`${this.oppName} answered. Rematch.`);
+          break;
+        }
         this.oppCalled = true;
         this.announce(`${this.oppName} is calling for a rematch.`);
         this.renderEnd();
@@ -453,6 +466,8 @@ export class MatchView {
     } else if (phase === "over") {
       this.desk.reset({ restore: false });
       this.el.turn.classList.remove("show");
+      // A dropped connection can miss the "over" event: the ending then plays from the state.
+      if (prev && !this.result && s.result) await this.playOver(s.result);
     }
     // Arriving at a match that has already ended: the verdict and the telegram are simply there.
     if (phase === "over" && !prev) {
@@ -630,7 +645,9 @@ export class MatchView {
   }
 
   async playOver(r) {
+    const run = this.run;
     this.result = r;
+    if (this.solo && ["me", "opp", "draw"].includes(r.winner)) this.app.recordSolo({ me: "win", opp: "loss", draw: "draw" }[r.winner]);
     // The match state follows this event, so the battle's interface is cleared away now.
     this.setPhaseClass("over");
     this.desk.reset({ restore: false });
@@ -639,15 +656,19 @@ export class MatchView {
     this.sfx.mood("calm");
     this.note("");
     const cue = r.winner === "me" ? "fanfare" : r.winner === "opp" ? "taps" : r.winner === "draw" ? "horn" : null;
-    if (cue) wait(0.6).then(() => this.sfx.play(cue));
+    if (cue) wait(0.6).then(() => this.run === run && this.sfx.play(cue));
     await this.dir.ending(r);
-    if (this.solo && ["me", "opp", "draw"].includes(r.winner)) this.app.recordSolo({ me: "win", opp: "loss", draw: "draw" }[r.winner]);
-    this.animating--;
+    if (this.run !== run) return;
     this.app.refreshMe();
-    if (!this.active) return;
     await wait(this.stamped ? 0.9 : 0.2);
+    if (this.run !== run) return;
+    this.animating--;
     // The telegram carries the final count, which comes with the match state after this event.
     this.pendingTell = true;
+    if (this.s?.phase === "over") {
+      this.pendingTell = false;
+      this.tell();
+    }
   }
 
   fillOver(r) {
@@ -679,7 +700,8 @@ export class MatchView {
       this.dir.shake(0.3);
     });
     const r = this.s?.result || this.result;
-    if (r) this.announce(`${text}. ${reportLines(r, this.s, this.oppName)[0]}.`);
+    const head = r ? reportLines(r, this.s, this.oppName)[0] : "";
+    this.announce(head.toUpperCase().startsWith(text) ? `${head}.` : `${text}. ${head}.`);
   }
 
   // The telegram comes in, and the telephone and the signpost go up on the plank.
@@ -697,15 +719,23 @@ export class MatchView {
       play(e.telegram, [
         { opacity: 0, transform: phone ? "translateY(70px) rotate(2deg)" : "translateX(60px) rotate(3deg)" },
         { opacity: 1, transform: "none" },
-      ], { duration: 650, easing: OUT });
+      ], { duration: 650, easing: OUT }).finished.then(() => this.scrollCue(), () => {});
       play(e.ends, [{ transform: "translateY(110%)" }, { transform: "none" }], { duration: 520, easing: OUT });
       const strips = e.tgBody.querySelectorAll(".tg-lines p, .tg-codes");
-      strips.forEach((el, i) => play(el, [{ clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)" }], { duration: 420, delay: 380 + i * 280, easing: "steps(14)" }));
+      strips.forEach((el, i) => play(el, [{ clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)" }], { duration: 420, delay: 380 + i * 280, easing: "steps(14)", fill: "both" }));
       this.sfx.play("paper");
       this.sfx.play("morse", { delay: 0.38 });
     }
+    if (!this.stamped && r) this.announce(`${reportLines(r, this.s, this.oppName)[0]}.`);
+    this.scrollCue();
     const first = e.rematchBtn.hidden ? e.homeBtn : e.rematchBtn;
     first.focus({ preventScroll: true });
+  }
+
+  // A soft fade at the bottom of the telegram while more of it is below.
+  scrollCue() {
+    const o = this.el.over;
+    o.classList.toggle("more", o.scrollHeight - o.clientHeight - o.scrollTop > 4);
   }
 
   // The telephone's state: ready to call, ringing at their end, or ringing here.
@@ -716,7 +746,7 @@ export class MatchView {
     if (!s || !r) return this.ringing(false);
     const opp = this.oppName;
     const canCall = this.solo || ["cracked", "timeout", "time"].includes(r.reason);
-    const online = this.solo || this.oppOnline !== false;
+    const online = this.solo || (this.oppOnline !== false && !this.lineCut);
     const mine = !!s.rematch?.me;
     const theirs = !this.solo && (!!s.rematch?.opp || !!this.oppCalled);
     e.rematchBtn.hidden = !canCall;
@@ -724,7 +754,7 @@ export class MatchView {
     let sub = this.solo ? "play again" : "ask for a rematch";
     if (!online) {
       label = "The line is dead";
-      sub = `${opp} went off the radio`;
+      sub = this.lineCut ? "the room has closed" : `${opp} went off the radio`;
     } else if (mine) {
       label = `Ringing ${opp}`;
       sub = "waiting for an answer";
@@ -740,11 +770,12 @@ export class MatchView {
     this.ringing(canCall && online && (mine || theirs) && document.body.classList.contains("told"), theirs && !mine);
     let status = "";
     if (!canCall && r.winner !== "none") status = r.reason === "left" ? `No rematch: ${r.winner === "me" ? `${opp} left the field` : "you left the field"}.` : "";
+    else if (canCall && this.lineCut) status = "The room has closed. No rematch from here.";
     else if (canCall && !online) status = `${opp} has gone off the line. No rematch unless they come back.`;
     if (e.tgStatus.textContent !== status) e.tgStatus.textContent = status;
     // A quick match rematch is a new draw: your own orders go into it, and you can amend them first.
     const offers = !this.solo && canCall && !!s.offers;
-    e.tgOrders.hidden = !offers;
+    e.tgOrders.hidden = !offers || !online;
     if (offers) {
       this.offer ||= cleanOrders(s.offers.me);
       e.tgOrdersLine.textContent = `${ordersLine(this.offer)}${mine ? " Sent with your call." : ""}`;
@@ -771,11 +802,21 @@ export class MatchView {
     e.tgAmend.textContent = open ? "Done" : "Amend";
     this.sfx.play(open ? "paper" : "paperOff");
     this.app.layout();
+    requestAnimationFrame(() => {
+      if (open) e.tgOrders.scrollIntoView({ block: "nearest", behavior: reduced() ? "auto" : "smooth" });
+      this.scrollCue();
+    });
+  }
+
+  // The room has gone (it closes a while after the match): the telephone goes dead.
+  lineDown() {
+    this.lineCut = true;
+    this.renderEnd();
   }
 
   call() {
     const s = this.s;
-    if (s?.phase !== "over" || this.el.rematchBtn.getAttribute("aria-disabled") === "true") return;
+    if (!this.ended || this.el.rematchBtn.getAttribute("aria-disabled") === "true") return;
     this.sfx.play("crank");
     if (this.solo) return this.app.solo(this.level);
     this.conn?.send(s.offers ? { t: "rematch", orders: this.offer } : { t: "rematch" });
@@ -806,12 +847,15 @@ export class MatchView {
     this.pendingTell = false;
     this.stamped = false;
     this.oppCalled = false;
+    this.lineCut = false;
     this.offer = null;
     if (this.ordersForm && !this.el.tgForm.hidden) this.amend(false);
   }
 
   async restart() {
     this.clearEnd();
+    this.markRead();
+    this.seenVolleys = 0;
     this.app.layout();
     this.dir.resetField();
     this.input = "";
@@ -955,7 +999,7 @@ export class MatchView {
 
   canType() {
     const s = this.s;
-    if (!s || this.markMode) return false;
+    if (!s || this.markMode || this.ended) return false;
     if (s.phase === "deploy") return !s.me.secret;
     return s.phase === "battle";
   }
@@ -1316,14 +1360,14 @@ export class MatchView {
     this.matchClock();
     const s = this.s;
     const t = this.el.timer;
-    if (this.active && s?.phase === "battle" && s.turn === "me" && !this.animating && !this.firing && this.idleAt && performance.now() - this.idleAt > 11000) {
+    if (this.active && !this.ended && s?.phase === "battle" && s.turn === "me" && !this.animating && !this.firing && this.idleAt && performance.now() - this.idleAt > 11000) {
       this.idleAt = performance.now() + 5000;
       this.banner(this.input.length === 4 ? "Ready: hit Fire" : "Your shot", 3200);
       this.el.turn.classList.add("nudge");
       this.note(this.input.length === 4 ? "<b>Four digits aimed.</b> Hit Fire when you are ready." : anySupply(this.s.orders || STANDARD_ORDERS) && this.s.me.supplies > 0 ? "<b>Your shot.</b> Aim four digits, or open a supply on the bar." : "<b>Your shot.</b> Aim four digits on the keypad.", 4200);
     }
     const total = s?.phase === "battle" ? s.turnMs : PHASE_MS[s?.phase];
-    if (!this.active || !s || !s.deadline || !total || this.animating) {
+    if (!this.active || !s || !s.deadline || !total || this.animating || this.ended) {
       if (!t.hidden) t.hidden = true;
       return;
     }
@@ -1367,10 +1411,10 @@ function verdictLine(text, winner, reason) {
   return "";
 }
 
-// A telegram number that stays the same for a match, from its room and match count.
+// A telegram number that both players share, from the room's code and the match count.
 function telegramNo(s) {
   let h = s.match || 1;
-  for (const c of String(s.room || s.opp?.name || "")) h = (h * 31 + c.charCodeAt(0)) % 9000;
+  for (const c of String(s.code || "")) h = (h * 31 + c.charCodeAt(0)) % 9000;
   return 1000 + h;
 }
 

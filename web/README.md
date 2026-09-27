@@ -23,7 +23,7 @@ Every match is played under a set of **orders**: which supplies are on, how many
 | `src/client/scene/stage.js` | The renderer. The drawing buffer is only resized right before a render, since a resize clears it and a cleared buffer on screen is a black frame; resolution adapts to the frame rate in quarter steps, and a lost WebGL context is rebuilt. |
 | `src/client/scene/logo.js` | The portfolio's block logo with a symbol in its fourth block: a skull for dead, a bandage for injured. They frame the title while the field loads and land above every volley's result. |
 | `src/client/audio.js` | Every sound is synthesised with Web Audio (cannons, whistles, the death knell, bugles, wind), so there are no audio files to download. |
-| `src/client/match.js` | The match screen: plays the server's events as animations in order. Its tools sit on a wooden plank at the bottom as clay 3D icons (`scene/icons.js`): the field gun opens fire control, the plane, scope and smoke canister open each supply's dossier, the notebook keeps the log, the speech bubble holds the taunts. Windows open, minimise and close like a taskbar (`desk.js`); a brass stud in the corner pauses. |
+| `src/client/match.js` | The match screen: plays the server's events as animations in order. Its tools sit on a wooden plank at the bottom as clay 3D icons (`scene/icons.js`): the field gun opens fire control, the plane, scope and smoke canister open each supply's dossier, the notebook keeps the log, the speech bubble holds the taunts. Windows open, minimise and close like a taskbar (`desk.js`); a brass stud in the corner pauses. At the end the field plays out the surrender, a rubber stamp gives the verdict, the report arrives as a telegram (`report.js`), and a field telephone (rematch) and a signpost (back to base) replace the tools. |
 | `src/client/match.css`, `textures.js` | The match screen's materials: paper, manila card and wood painted once at load, stencil, typewriter and chalk lettering (Stardos Stencil, Courier Prime and Caveat, all under the Open Font License, in `static/fonts`). |
 
 ## Redesign
@@ -38,7 +38,7 @@ npx wrangler d1 execute dead-and-injured --local --file schema.sql
 npm run dev
 ```
 
-`npm test` runs the rules, engine and computer tests. With `wrangler dev` running, `node test/api.mjs` checks the rooms, the lobby and the API without a browser, `node test/e2e.mjs` plays a full live match between two browsers and `node test/quick.mjs` checks quick match and signing in (the browser tests need `NODE_PATH=$(npm root -g)` for Playwright). `node test/api.mjs --clock` checks that a room ends itself when the match clock runs out; run it against `wrangler dev --var TIME_SCALE:0.05`, where five minutes pass in fifteen seconds.
+`npm test` runs the rules, engine, computer and telegram tests. With `wrangler dev` running, `node test/api.mjs` checks the rooms, the lobby and the API without a browser, `node test/e2e.mjs` plays a full live match between two browsers, through the stamp and telegram to a rematch, and `node test/quick.mjs` checks quick match and signing in (the browser tests need `NODE_PATH=$(npm root -g)` for Playwright). `node test/api.mjs --clock` checks that a room ends itself when the match clock runs out; run it against `wrangler dev --var TIME_SCALE:0.05`, where five minutes pass in fifteen seconds.
 
 ## Models
 

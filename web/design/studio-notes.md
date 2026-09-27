@@ -37,3 +37,20 @@ Shipped as planned: orders, supply switches, the crates split, the match clock a
 - **The report is a telegram**: cream paper strips pasted on a form, typed, with STOP between sentences ("GENERAL CRACKED YOUR CODE STOP 6 VOLLEYS FIRED STOP"). Both codes are stencilled on two little crate labels on the form. A loss or win on time says who came closest and by what.
 - **The choices are objects on the plank** the tools sat on during the match: a field telephone to call for reinforcements (play again, or ask for a rematch, which rings until they answer) and a signpost pointing home (back to base). In quick match the telegram also carries your orders, which you can change before calling for a rematch.
 - **Framing**: on desktop the telegram sits to one side so the staged ending stays in view; on a phone the ending plays first, then the telegram rises from the plank.
+
+### What was built
+
+- **The stamp** is a real rubber stamp in HTML: the word in stencil type inside a double-ruled frame, red ink worn by a painted mask (gaps, thin patches and scratches), landing with a thump, a little overshoot and a soft ink spread. It sits in the sky, to the left of the telegram on wide screens.
+- **The telegram** is typed on pasted strips that come off the tape one after another, each ending in STOP, with both codes on crate labels. A win or loss on time adds each side's best volley. It rises from the plank on an upright phone and stands to the right of the scene on a desktop or a phone on its side; a soft fade at its foot says when there is more to read.
+- **The choices** are a field telephone and a signpost on the plank, each with a paper tag on a string. The telephone came out of a design panel (three directions, two judges, one refinement): an olive field case with its magneto bell and crank, and a big bakelite handset that reads as a telephone at 56 px. It rings (two bursts of the bell, then a pause) while a rematch call is waiting, at both ends, and goes dead with a note if the room closes. In quick match the telegram carries your orders, with an Amend link that opens the orders form.
+- **Order of events**: the ending plays in full, the stamp lands, and only then does the telegram come, carrying the final count. Leaving or starting a new match ends the sequence at once; a reconnect that missed the end plays it from the state.
+
+### Review
+
+- Art director: the loss, the win and the stalemate are all told by the field itself; the only paper on screen is the telegram and the tags, and the stamp is ink, not a web banner.
+- Game designer: the telegram says why the match ended, and on time who came closest and by what; a closed room or a player who left says plainly why there is no rematch.
+- UX designer: the telephone and the signpost are real buttons with their labels always on show; focus goes to the telephone when the telegram arrives; the telegram comes first in the Tab order, so amending orders leads straight to the call.
+- Cinematographer: on a phone the shots turn to keep the white flag, both squads and the stamp's sky in one frame, and the camera glides up to make room for the telegram instead of jumping.
+- Animation and sound: the stamp lands on a thump, the strips type in with a telegraph sounder, the telephone rings with a bell and a crank; under reduced motion the camera cuts, nothing shakes and nothing types.
+- QA: two reviewers tried to break it and 19 of their 20 findings were confirmed and fixed (the ending leaking into the menu, a reconnect that never showed the end, the stale battle state during the ending, a telephone that rang forever after the room closed, focus marks, tap sizes, widths from 441 to 555 px, phones on their side). Checked at 320, 360, 390, 441, 480, 520, 600 and 1440 wide and 844 by 390; engine and report tests, and a live two-player match with a rematch.
+- Accessibility and performance: the verdict and the report's first line are read out once; the tags and the telegram are text; the telephone and signpost are two merged meshes on the existing icon pass.

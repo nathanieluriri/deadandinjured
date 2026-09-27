@@ -31,8 +31,8 @@ const SHOTS = {
   mine: { pos: [0, 3.3, 16.2], look: [0, 1.5, 9], fov: 40 },
   far: { pos: [0, 6.5, 26], look: [0, 3.5, -12], fov: 42 },
   // The endings, held on our own trench.
-  surrender: { pos: [3.4, 1.8, 12.4], look: [-0.9, 2.1, -7], fov: 36, kp: 1.5 },
-  surrenderHigh: { pos: [3, 3.3, 14.4], look: [-0.6, 2.4, -9], fov: 34, kp: 1.5 },
+  surrender: { pos: [3.4, 1.8, 12.4], look: [-0.9, 2.1, -7], fov: 36, kp: 1.5, narrow: { pos: [1.6, 1.8, 12.4], look: [-1.5, 2.1, -7] } },
+  surrenderHigh: { pos: [3, 3.3, 14.4], look: [-0.6, 2.4, -9], fov: 34, kp: 1.5, narrow: { pos: [1.4, 3.3, 14.4], look: [-1.3, 2.4, -9] } },
   victory: { pos: [2.8, 3, 13.5], look: [0.4, 0.9, -17], fov: 31, kp: 1.4 },
   victoryHigh: { pos: [2.4, 3.9, 15.2], look: [0.4, 1.1, -17], fov: 30, kp: 1.4 },
   stalemate: { pos: [-1.5, 3.8, 15.5], look: [0, 1.6, -8], fov: 40, kp: 1.45 },
@@ -117,8 +117,9 @@ export class Director {
   }
 
   shotFor(name) {
-    const s = SHOTS[name];
     const a = this.stage.aspect;
+    // A tall screen sees less to the sides, so some shots turn to keep their subject in frame.
+    const s = a < 0.9 && SHOTS[name].narrow ? { ...SHOTS[name], ...SHOTS[name].narrow } : SHOTS[name];
     const kp = s.kp || 1.7;
     const k = a < 0.62 ? kp : a < 0.9 ? 1 + (kp - 1) * 0.6 : a < 1.25 ? 1 + (kp - 1) * 0.23 : 1;
     const look = V(...s.look);
@@ -166,7 +167,7 @@ export class Director {
   }
 
   shake(a) {
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) a *= 0.25;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     this.shakeAmt = Math.min(1.2, Math.max(this.shakeAmt, a));
   }
 
@@ -579,6 +580,11 @@ export class Director {
   // white flag goes over its sandbags, the other side cheers, and the camera settles on our
   // trench. The verdict itself is stamped by the page when the "verdict" beat fires.
   async ending({ winner, reason, codes }) {
+    // Leaving the field or starting another match resets it, which ends this sequence.
+    const epoch = this.epoch;
+    const gone = () => epoch !== this.epoch;
+    // Under reduced motion the camera cuts between its shots instead of travelling.
+    const k = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 1;
     const text = winner === "draw" ? "STALEMATE" : reason === "time" && winner !== "none" ? "TIME" : winner === "me" ? (reason === "cracked" ? "CRACKED" : "VICTORY") : winner === "opp" ? (reason === "cracked" ? "OVERRUN" : "FORFEIT") : null;
     const loser = winner === "me" ? "opp" : winner === "opp" ? "me" : null;
     if (loser) gsap.to(this.world.flags[loser], { lower: 0.5, duration: 2.2, ease: "power2.inOut" });
@@ -589,22 +595,25 @@ export class Director {
       cb.group.visible = true;
       cb.group.position.y = -2.4;
       this.setCode(codes.opp, { side: "opp", sound: false });
-      await this.shot("reveal", 1.4);
+      await this.shot("reveal", 1.4 * k);
+      if (gone()) return;
       gsap.to(cb.group.position, { y: 0, duration: 1.2, ease: "power3.out" });
       this.sfx.play("rumble");
       this.fx.dust(V(0, 0.2, cb.group.position.z), 10, 1.4);
       await wait(1.3);
+      if (gone()) return;
     }
 
     if (loser) {
       const victor = other(loser);
       const home = loser === "me" ? "surrender" : "victory";
-      this.shot(home, 1.9, "power2.inOut");
+      this.shot(home, 1.9 * k, "power2.inOut");
       // A code is cracked by four dead: the rest of the company climbs up out of the trench to
       // give in, and the winners come back to full strength to see it.
       const fallen = ["me", "opp"].map((side) => this.army.squad(side).some((x) => !x.alive));
       for (const side of ["me", "opp"]) this.reinforce(side);
       await wait(fallen.some(Boolean) ? 1.9 : 0.9);
+      if (gone()) return;
       for (const s of this.army.squad(loser)) s.surrender(rnd(0, 0.7));
       for (const s of this.army.squad(victor)) wait(rnd(0.2, 0.7)).then(() => s.cheer(40));
       const flag = this.whiteFlags[loser];
@@ -613,16 +622,18 @@ export class Director {
       gsap.to(flag, { rise: 1, duration: 2.2, delay: 0.5, ease: "power2.out" });
       this.sfx.play(loser === "me" ? "rumble" : "radio", { far: 0.6 });
       await wait(1.1);
+      if (gone()) return;
       // A slow crane as the flag goes up, so the last frame holds the whole scene.
-      this.shot(`${home}High`, 4.5, "sine.inOut");
+      this.shot(`${home}High`, 4.5 * k, "sine.inOut");
       await wait(1.4);
     } else if (winner === "draw") {
-      this.shot("stalemate", 2.2);
+      this.shot("stalemate", 2.2 * k);
       for (const side of ["me", "opp"]) this.fx.screen(V(0, 0, SIDES[side].z), true);
       await wait(1.6);
     } else {
-      await this.shot("far", 2.2);
+      await this.shot("far", 2.2 * k);
     }
+    if (gone()) return;
     if (text) {
       if (this.hooks.verdict) this.emit("verdict", { text, winner, reason });
       else this.dropWord(text);
@@ -642,11 +653,13 @@ export class Director {
   }
 
   resetField() {
+    this.epoch = (this.epoch || 0) + 1;
     this.hideWords();
     for (const f of Object.values(this.whiteFlags)) {
       gsap.killTweensOf(f);
       f.reset();
     }
+    gsap.killTweensOf([this.world.flags.me, this.world.flags.opp, this.codes.opp.group.position]);
     this.world.flags.me.lower = 0;
     this.world.flags.opp.lower = 0;
     this.codes.opp.group.visible = false;

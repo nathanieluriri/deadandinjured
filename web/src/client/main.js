@@ -265,7 +265,7 @@ class App {
 
   inMatch() {
     const s = this.view.s;
-    return this.screen === "match" && s && !["over", "lobby"].includes(s.phase);
+    return this.screen === "match" && s && !["over", "lobby"].includes(s.phase) && !this.view.ended;
   }
 
   pause() {
@@ -361,13 +361,13 @@ class App {
       if (this.screen === "match") {
         // Set by the bar and the keypad's height, open or not, so opening windows never moves the camera.
         const bar = $("bar").getBoundingClientRect().height || 72;
+        document.documentElement.style.setProperty("--plankH", `${Math.round(bar)}px`);
         if (b.classList.contains("phase-deploy") || b.classList.contains("phase-battle")) bottom = innerWidth < 900 ? (bar + 360) * 0.9 : innerWidth < 1180 ? (bar + 375) * 0.62 : (bar + 190) * 0.6;
         else if (b.classList.contains("phase-supply")) bottom = bar + 20;
         else if (b.classList.contains("phase-over")) {
-          // On a phone the telegram takes the lower half, so the scene moves up above it.
-          const told = b.classList.contains("told");
-          const over = $("over").getBoundingClientRect();
-          bottom = told && innerWidth < 900 ? innerHeight - over.top + 8 : bar;
+          // On an upright phone the telegram takes the lower half, so the scene moves up above it.
+          const below = b.classList.contains("told") && innerWidth < 900 && innerHeight > 520;
+          bottom = below ? innerHeight - $("over").getBoundingClientRect().top + 8 : bar;
         }
         top = innerWidth < 900 ? 100 : 50;
       } else if (this.screen === "menu") {
@@ -639,8 +639,11 @@ class App {
       this.home();
     }
     if (status === "gone") {
-      if (this.view.s?.phase !== "over") this.toast("The room has closed");
-      if (this.screen !== "match" || this.view.s?.phase !== "over") this.home();
+      const over = this.screen === "match" && this.view.ended;
+      if (!over) {
+        this.toast("The room has closed");
+        this.home();
+      } else this.view.lineDown();
     }
     if (status === "replaced") {
       this.toast("This match is open in another tab");

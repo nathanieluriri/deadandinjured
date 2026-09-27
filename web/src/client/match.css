@@ -660,27 +660,30 @@ body.cine .hud, body.cine .desk, body.cine .bar, body.cine .note, body.cine .top
 }
 
 /* ---- the end of a match: the stamp, the telegram and the two choices ---------------------- */
+/* --plankH is the plank's measured height, set by the layout. */
 .phase-over .turn { visibility: hidden; min-width: 0; width: 0; overflow: hidden; }
 .phase-over.told .bar, .phase-over.told #ends { display: flex; }
-.ends { gap: 16px; min-height: 78px; padding-inline: 26px; }
-.tb.end { width: auto; height: 72px; display: flex; align-items: center; gap: 0; padding: 0 4px 0 0; border-radius: 12px; }
+.ends { gap: 16px; min-height: 78px; max-width: calc(100vw - 16px); padding-inline: 26px; }
+.tb.end { width: auto; min-width: 0; flex: 0 1 auto; height: 72px; display: flex; align-items: center; gap: 0; padding: 0 4px 0 0; border-radius: 12px; }
 .tb.end .ic { flex: none; display: block; width: 66px; height: 66px; }
 .tb.end .end-tag { position: relative; display: grid; gap: 3px; margin-left: 6px; padding: 7px 12px 6px 22px; border-radius: 3px 2px 2px 3px; background: radial-gradient(circle at 10px 50%, transparent 3px, #b99d6d 3.4px, #b99d6d 5.2px, transparent 5.6px), var(--tex-pad), #efe8d6; color: var(--ink-paper); text-align: left; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45); rotate: -2deg; transition: translate 0.25s var(--out), rotate 0.25s var(--out); }
 .tb.end .end-tag::before { content: ""; position: absolute; left: -9px; top: calc(50% - 1px); width: 18px; height: 1.5px; border-radius: 1px; background: #d8ccb0; rotate: 14deg; }
 .tb.end .end-tag b { font: 700 14px/1.15 var(--typed); white-space: nowrap; letter-spacing: 0; text-transform: none; }
 .tb.end .end-tag small { font: italic 400 12px/1.15 var(--typed); color: var(--pencil); white-space: nowrap; }
-.tb.end:hover .tag, .tb.end:focus-visible .tag { translate: 0 -2px; rotate: -1deg; }
+.tb.end:hover .end-tag, .tb.end:focus-visible .end-tag { translate: 0 -2px; rotate: -1deg; }
 .tb.end:focus-visible::before { display: none; }
-.tb.end:focus-visible .tag { outline: 2px dashed rgba(239, 231, 214, 0.9); outline-offset: 4px; }
+.tb.end:focus-visible .end-tag { outline: 2px dashed rgba(239, 231, 214, 0.9); outline-offset: 4px; }
 .tb.end[aria-disabled="true"] { cursor: default; }
-.tb.end[aria-disabled="true"] .tag { rotate: -2deg; translate: none; }
+.tb.end[aria-disabled="true"] .end-tag { rotate: -2deg; translate: none; opacity: 0.8; }
 #homeBtn .end-tag { rotate: 1.5deg; }
 
-.over { position: absolute; z-index: 18; display: none; top: calc(var(--pad) + var(--top) + 58px); right: var(--pad); width: min(430px, calc(100vw - 2 * var(--pad))); max-height: calc(100% - var(--pad) - var(--top) - 58px - var(--barH) - 10px); padding: 8px 12px 22px; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(233, 220, 192, 0.35) transparent; }
+.over { position: absolute; z-index: 18; display: none; top: calc(var(--pad) + var(--top) + 58px); right: var(--pad); width: min(430px, calc(100vw - 2 * var(--pad))); max-height: calc(100% - var(--pad) - var(--top) - 58px - var(--plankH, var(--barH)) - 10px); padding: 8px 12px 22px; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(233, 220, 192, 0.35) transparent; }
+.over.more { -webkit-mask-image: linear-gradient(#000 calc(100% - 40px), transparent); mask-image: linear-gradient(#000 calc(100% - 40px), transparent); }
 .phase-over.told .over { display: block; }
 .tg-line { margin: 0; font: 400 13px/1.45 var(--typed); }
 .tg-label { font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; font-size: 11px; color: var(--pencil); margin-right: 4px; }
-.tg-amend { display: inline-block; min-height: 32px; padding: 0 6px; font: 700 13px/32px var(--hand); font-size: 19px; color: var(--ink-blue); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 3px; rotate: -2deg; }
+.tg-amend { position: relative; display: inline-block; min-height: 32px; padding: 0 6px; font: 700 19px/32px var(--hand); color: var(--ink-blue); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 3px; rotate: -2deg; }
+.tg-amend::after { content: ""; position: absolute; inset: -7px -6px; }
 .tg-amend:hover { color: #1d3350; }
 .tg-amend[hidden] { display: none; }
 #tgForm { margin-top: 10px; }
@@ -696,8 +699,9 @@ body.cine .hud, body.cine .desk, body.cine .bar, body.cine .note, body.cine .top
 @media (min-width: 900px) {
   .verdict { right: calc(min(430px, 100vw - 2 * var(--pad)) + var(--pad)); }
 }
+/* Phones upright: the telegram rises from the plank and the scene moves up above it. */
 @media (max-width: 899px) {
-  .over { top: auto; bottom: calc(var(--barH) - 4px); left: 50%; right: auto; translate: -50% 0; width: min(440px, 100vw); max-height: calc(100% - var(--barH) - var(--top) - 200px); padding: 6px 10px 12px; }
+  .over { top: auto; bottom: calc(var(--plankH, var(--barH)) + 2px); left: 50%; right: auto; translate: -50% 0; width: min(440px, 100vw); max-height: calc(100% - var(--plankH, var(--barH)) - var(--top) - 216px); padding: 6px 10px 12px; }
   .verdict { top: calc(var(--top) + 96px); }
   .ends { gap: 10px; padding-inline: 16px; min-height: 70px; }
   .tb.end { height: 64px; }
@@ -705,14 +709,17 @@ body.cine .hud, body.cine .desk, body.cine .bar, body.cine .note, body.cine .top
   .tb.end .end-tag { padding: 6px 10px 5px 20px; }
   .tb.end .end-tag b { font-size: 13px; }
 }
+@media (max-width: 640px) {
+  .tb.end .end-tag b, .tb.end .end-tag small { white-space: normal; max-width: 16ch; overflow-wrap: break-word; }
+  #homeBtn .end-tag b { max-width: 8ch; }
+}
 @media (max-width: 440px) {
   .ends { gap: 6px; padding-inline: 12px; }
   .tb.end .ic { width: 50px; height: 50px; }
   .tb.end .end-tag { margin-left: 4px; padding: 5px 8px 4px 19px; }
-  .tb.end .end-tag b, .tb.end .end-tag small { white-space: normal; max-width: 14ch; overflow-wrap: anywhere; }
+  .tb.end .end-tag b, .tb.end .end-tag small { max-width: 15ch; }
   .tb.end .end-tag b { font-size: 12.5px; }
   .tb.end .end-tag small { font-size: 11px; }
-  #homeBtn .end-tag b { max-width: 8ch; }
   .tg-strip { font-size: 12.5px; }
   .tg-lines { gap: 5px; margin-bottom: 9px; }
   .telegram { padding: 12px 14px; }
@@ -722,7 +729,6 @@ body.cine .hud, body.cine .desk, body.cine .bar, body.cine .note, body.cine .top
 @media (max-width: 360px) {
   .vd-ink { padding: 10px 18px 9px; border-width: 5px; }
   .vd-ink b { font-size: 38px; }
-  .over { bottom: calc(var(--barH) + 20px); }
   .tg-codes { gap: 12px; }
   .tg-code .tiles i { width: 23px; height: 26px; font-size: 15px; }
   .ends { gap: 14px; padding: 2px 14px 6px; }
@@ -732,4 +738,10 @@ body.cine .hud, body.cine .desk, body.cine .bar, body.cine .note, body.cine .top
   .tb.end .end-tag::before { left: calc(50% - 0.75px); top: -7px; width: 1.5px; height: 11px; rotate: 0deg; }
   #homeBtn .end-tag b { max-width: none; white-space: nowrap; }
   .tb.end .end-tag small { display: none; }
+}
+/* Phones on their side: the telegram stands beside the scene, as on a desktop. */
+@media (max-width: 899px) and (max-height: 520px) {
+  .over { top: calc(var(--pad) + var(--top) + 40px); bottom: auto; left: auto; right: var(--pad); translate: none; width: min(360px, 46vw); max-height: calc(100% - var(--pad) - var(--top) - 40px - var(--plankH, var(--barH)) - 6px); }
+  .verdict { top: calc(var(--top) + 48px); right: calc(min(360px, 46vw) + var(--pad)); }
+  .vd-ink b { font-size: 40px; }
 }

@@ -160,10 +160,11 @@ const ICONS = {
   rock: { build: () => rock(SIDES.me.clay), pose: [0.3, 0.4, 0], size: 0.9 },
   paper: { build: () => paper(SIDES.opp.clay), pose: [0.15, -0.35, 0.12], size: 0.95 },
   scissors: { build: scissors, pose: [0.2, -0.3, -0.6], size: 1 },
-  phone: { build: fieldPhone, pose: [0.32, -0.62, 0], size: 1.02 },
+  phone: { build: fieldPhone, pose: [0.2, -0.4, 0], size: 1.08 },
   signpost: { build: signpost, pose: [0.12, -0.5, 0], size: 1.05 },
 };
 
+const still = matchMedia("(prefers-reduced-motion: reduce)");
 const mat = () => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.58, metalness: 0.06 });
 const GREY = 0x8d877c;
 
@@ -495,7 +496,7 @@ export class IconDeck {
       it.press *= Math.exp(-dt * 9);
       const pulse = it.pulsing ? (Math.sin(this.time * 4.2) * 0.5 + 0.5) : 0;
       const px = Math.min(r.width, r.height) * it.size;
-      const ph = it.ringAt ? (this.time - it.ringAt) % 2.4 : 9;
+      const ph = it.ringAt && !still.matches ? (this.time - it.ringAt) % 2.4 : 9;
       const ring = ph < 0.45 || (ph > 0.65 && ph < 1.1) ? 1 : 0;
       const lift = it.hover * px * 0.14 - it.press * px * 0.08 + pulse * px * 0.07 + ring * px * 0.05;
       it.root.position.set(r.left + r.width / 2, -(r.top + r.height / 2) + lift, 0);
