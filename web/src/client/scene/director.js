@@ -21,7 +21,8 @@ const other = (side) => (side === "me" ? "opp" : "me");
 const SHOTS = {
   // The places of the trench network behind our left flank, framed where they are.
   corner: { pos: [-11.0, 2.4, 14.8], look: [-14.8, 1.6, 6.8], fov: 50, kp: 1, narrow: { pos: [-14.7, 2.4, 16.5], look: [-15.55, 1.75, 7.0], fov: 58 } },
-  board: { pos: [-14.95, 1.65, 8.2], look: [-17.05, 1.28, 8.9], fov: 46, kp: 1, narrow: { pos: [-13.4, 1.75, 8.0], look: [-17.05, 1.28, 8.9] } },
+  board: { pos: [-14.9, 1.62, 7.75], look: [-17.05, 1.3, 8.75], fov: 46, kp: 1, narrow: { pos: [-13.4, 1.75, 8.0], look: [-17.05, 1.28, 8.9] } },
+  manual: { pos: [-15.6, 1.45, 11.3], look: [-16.5, 0.62, 10.3], fov: 46, kp: 1 },
   war: { pos: [-13.6, 1.9, 17.2], look: [-13.2, 0.85, 20.3], fov: 58, kp: 1, narrow: { pos: [-13.5, 2.2, 17.25], look: [-13.25, 0.75, 20.0] } },
   signals: { pos: [-17.35, 1.66, 14.35], look: [-18.75, 1.3, 17.4], fov: 58, kp: 1, narrow: { pos: [-17.6, 1.7, 14.1], look: [-18.6, 1.35, 17.4], fov: 60 } },
   radio: { pos: [-9.6, 1.9, 22.4], look: [-9.6, 1.0, 26.6], fov: 52, kp: 1, narrow: { pos: [-9.6, 2.1, 21.9], look: [-9.6, 1.0, 26.4] } },
@@ -141,12 +142,22 @@ export class Director {
     this.name = name;
     if (!instant) return;
     const s = this.shotFor(name);
+    // A resize during a journey moves where it ends instead of cutting it.
+    const trip = this.trip;
+    if (trip?.name === name) {
+      trip.to = s;
+      trip.curve.points[trip.curve.points.length - 1].copy(s.pos);
+      trip.curve.updateArcLengths();
+      return;
+    }
+    this.endJourney();
     this.pos.copy(s.pos);
     this.look.copy(s.look);
     this.fov = s.fov;
   }
 
   shot(name, dur = 1.2, ease = "power3.inOut") {
+    this.endJourney();
     this.name = name;
     const s = this.shotFor(name);
     gsap.killTweensOf([this.pos, this.look, this]);
@@ -165,12 +176,12 @@ export class Director {
   // waypoints, looking a little ahead of itself as a walking operator would, and settles on the
   // framing of the shot it is going to. Under reduced motion it cross-fades instead.
   travel(name, via = [], { dur = null, ease = "sine.inOut", ahead: lead = true } = {}) {
-    const to = this.shotFor(name);
+    this.endJourney();
     gsap.killTweensOf([this.pos, this.look, this]);
-    this.journey?.kill();
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) return this.fade(() => this.applyShot(name, true));
     this.name = name;
-    const curve = new THREE.CatmullRomCurve3([this.pos.clone(), ...via.map((p) => V(...p)), to.pos], false, "centripetal");
+    const curve = new THREE.CatmullRomCurve3([this.pos.clone(), ...via.map((p) => V(...p)), this.shotFor(name).pos], false, "centripetal");
+    const trip = (this.trip = { name, curve, to: this.shotFor(name) });
     const time = dur ?? Math.min(3, Math.max(1.6, 1.1 + curve.getLength() * 0.08));
     const look0 = this.look.clone();
     const fov0 = this.fov;
@@ -182,9 +193,11 @@ export class Director {
       return t * t * (3 - 2 * t);
     };
     return new Promise((done) => {
+      trip.done = done;
       this.journey = gsap.to(s, {
         u: 1, duration: time, ease,
         onUpdate: () => {
+          const to = trip.to;
           curve.getPointAt(s.u, this.pos);
           curve.getPointAt(Math.min(1, s.u + 0.08), ahead);
           aim.subVectors(ahead, this.pos);
@@ -196,10 +209,20 @@ export class Director {
         },
         onComplete: () => {
           this.journey = null;
+          this.trip = null;
           done();
         },
       });
     });
+  }
+
+  // Stops a journey where it is; whatever waits on it carries on.
+  endJourney() {
+    const trip = this.trip;
+    this.journey?.kill();
+    this.journey = null;
+    this.trip = null;
+    trip?.done?.();
   }
 
   // A second click during a journey speeds it up; the take never cuts.
@@ -218,6 +241,7 @@ export class Director {
 
   // A camera move to any framing, for the moments that follow one soldier or one plane.
   move(pos, look, fov, dur = 1, ease = "power3.inOut") {
+    this.endJourney();
     gsap.killTweensOf([this.pos, this.look, this]);
     return new Promise((done) => {
       gsap.to(this.pos, { x: pos.x, y: pos.y, z: pos.z, duration: dur, ease });

@@ -71,6 +71,8 @@ export class Title {
     this.app = app;
     this.place = null;
     this.busy = false;
+    // Bumped by every walk, so a walk cut short by another never lays out its place.
+    this.trip = 0;
     this.v = new THREE.Vector3();
     this.hotEls = [];
     this.bind();
@@ -94,7 +96,7 @@ export class Title {
     });
     $("joinCode").addEventListener("input", () => this.tiles());
     $("joinAccept").addEventListener("click", () => this.accept());
-    $("joinDecline").addEventListener("click", () => this.hangUp());
+    $("joinDecline").addEventListener("click", () => this.decline());
     $("cancelWait").addEventListener("click", () => this.hangUp());
     $("shareBtn").addEventListener("click", () => this.app.share());
     addEventListener("keydown", (e) => {
@@ -110,7 +112,12 @@ export class Title {
       if (this.introing) this.skipIntro();
       else if (this.busy) this.dir.hurry();
     }, true);
-    addEventListener("keydown", () => this.introing && this.skipIntro(), true);
+    // The key that skips must not also press whatever takes the focus at the corner.
+    addEventListener("keydown", (e) => {
+      if (!this.introing) return;
+      e.preventDefault();
+      this.skipIntro();
+    }, true);
   }
 
   // Arriving on the title: the corner, reached from wherever the camera is.
@@ -125,8 +132,10 @@ export class Title {
       return this.arrive("corner");
     }
     if (this.place === "corner") return this.arrive("corner");
+    const trip = ++this.trip;
     this.busy = true;
-    await this.dir.travel("corner", this.place ? route(this.place, "corner") : RETURN);
+    await this.walk(this.dir.travel("corner", this.place ? route(this.place, "corner") : RETURN));
+    if (trip !== this.trip) return;
     this.busy = false;
     if (this.app.screen === "menu") this.arrive("corner");
   }
@@ -139,12 +148,20 @@ export class Title {
 
   async intro() {
     this.clear();
+    this.trip++;
+    this.busy = false;
     this.place = null;
     this.introing = true;
     this.dir.pos.set(22, 24, -60);
     this.dir.look.set(0, 2, -18);
     this.dir.fov = 46;
     this.dir.name = "intro";
+    this.net.furl();
+    setTimeout(() => {
+      if (!this.introing) return;
+      this.net.unfurl();
+      this.app.sfx.play("unfurl");
+    }, 7400);
     const flight = this.dir.travel("corner", INTRO, { dur: 9, ease: "power1.inOut" });
     await flight;
     if (!this.introing) return;
@@ -159,6 +176,10 @@ export class Title {
     if (!this.introing) return;
     this.introing = false;
     this.dir.journey?.progress(1);
+    if (this.net.bannerK < 1) {
+      this.net.unfurl();
+      this.app.sfx.play("unfurl");
+    }
     try {
       localStorage.setItem("di.intro", "1");
     } catch {}
@@ -177,15 +198,62 @@ export class Title {
     const from = this.place;
     this.opts = opts;
     this.clear();
+    this.app.layout();
+    const trip = ++this.trip;
     this.busy = true;
     this.app.sfx.play("paperOff");
-    await this.dir.travel(PLACES[to].shot, route(from, to));
+    await this.walk(this.dir.travel(PLACES[to].shot, route(from, to)));
+    if (trip !== this.trip) return;
     this.busy = false;
     if (this.app.screen !== "menu") return;
     this.arrive(to);
   }
 
+  // Footsteps on the duckboards for as long as a journey lasts.
+  async walk(journey) {
+    let on = !reduced();
+    const step = () => {
+      if (!on) return;
+      this.app.sfx.play("step");
+      setTimeout(step, 380 + Math.random() * 90);
+    };
+    step();
+    try {
+      return await journey;
+    } finally {
+      on = false;
+    }
+  }
+
+  // The field manual: a push in on the book on its crate, which opens; closing it steps back.
+  async manual() {
+    this.clear();
+    let trip = ++this.trip;
+    this.busy = true;
+    await this.dir.travel("manual", [], { dur: 1.3, ahead: false });
+    if (trip !== this.trip) return;
+    this.busy = false;
+    if (this.app.screen !== "menu") return;
+    this.net.book(true);
+    this.app.sfx.play("paper");
+    const d = $("manualDlg");
+    d.addEventListener("close", async () => {
+      this.net.book(false);
+      if (this.app.screen !== "menu" || this.place !== "corner" || trip !== this.trip) return;
+      trip = ++this.trip;
+      this.busy = true;
+      await this.dir.travel("corner", [], { dur: 1.1, ahead: false });
+      if (trip !== this.trip) return;
+      this.busy = false;
+      if (this.app.screen !== "menu" || this.place !== "corner") return;
+      this.arrive("corner");
+      this.hotEls.find((h) => h.key === "manual")?.el.focus({ preventScroll: true });
+    }, { once: true });
+    setTimeout(() => d.showModal(), reduced() ? 0 : 450);
+  }
+
   arrive(name) {
+    if (this.net.bannerK < 1) this.net.unfurl();
     this.place = name;
     const p = PLACES[name];
     document.body.dataset.place = name;
@@ -197,6 +265,8 @@ export class Title {
   }
 
   onArrive(name) {
+    this.app.sfx.place(name);
+    this.net.searching = name === "radio";
     if (name === "war") this.showOrders();
     if (name === "signals") this.signalsState();
     if (name === "radio") this.app.quick();
@@ -211,7 +281,7 @@ export class Title {
     const p = PLACES[this.place];
     if (!p?.back) return;
     if (this.place === "radio") this.app.cancelLobby();
-    if (this.place === "signals" && this.hosting) this.hangUp();
+    if (this.place === "signals" && (this.hosting || this.app.view.active)) this.hangUp();
     const to = this.place === "war" && this.opts?.mode === "host" ? "signals" : p.back;
     this.go(to, to === "war" ? { mode: "solo" } : {});
   }
@@ -219,11 +289,24 @@ export class Title {
   // Leaving the title for a match: out of the place and over the top to `shot`.
   exitTo(shot) {
     if (!this.place && !this.busy) return null;
-    const from = this.place || "corner";
+    // Caught mid-walk, the camera climbs out from where it is rather than from the place.
+    const p = this.dir.pos;
+    const via = this.busy ? [[p.x, p.y + 2.5, p.z]] : EXIT[this.place] || [];
+    this.leave();
+    return this.walk(this.dir.travel(shot, via, { dur: 2.6, ahead: false }));
+  }
+
+  // The title goes: nothing left laid out, no walk in progress. Joining a match already under
+  // way (a reload, a reopened link) leaves this way, with no journey at all.
+  leave() {
+    this.trip++;
+    this.busy = false;
+    this.introing = false;
+    if (this.net.bannerK < 1) this.net.unfurl();
     this.clear();
     this.place = null;
     delete document.body.dataset.place;
-    return this.dir.travel(shot, EXIT[from] || [], { dur: 2.6, ahead: false });
+    this.app.sfx.place(null);
   }
 
   clear() {
@@ -232,6 +315,7 @@ export class Title {
       this.net.hover(h.key, false);
     }
     this.hotEls = [];
+    this.net.searching = false;
     for (const s of document.querySelectorAll("#menu .sheet")) s.hidden = true;
     $("backBtn").hidden = true;
     $("placeNote").textContent = "";
@@ -272,7 +356,10 @@ export class Title {
       const v = this.v.copy(a).project(cam);
       const off = v.z > 1 || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1;
       h.el.style.visibility = off ? "hidden" : "";
-      h.el.style.transform = `translate(${((v.x + 1) / 2) * innerWidth}px, ${((1 - v.y) / 2) * innerHeight}px)`;
+      // Kept far enough in from the sides that the whole tag stays readable.
+      h.w ||= Math.max(h.el.offsetWidth, h.el.firstChild?.offsetWidth || 0) / 2 + 6;
+      const x = Math.min(innerWidth - h.w, Math.max(h.w, ((v.x + 1) / 2) * innerWidth));
+      h.el.style.transform = `translate(${x}px, ${((1 - v.y) / 2) * innerHeight}px)`;
     }
   }
 
@@ -285,7 +372,7 @@ export class Title {
       case "friend": return this.go("signals");
       case "quick": return this.go("radio");
       case "board": return this.go("board");
-      case "manual": return $("manualDlg").showModal();
+      case "manual": return this.manual();
       case "sound": {
         app.sfx.unlock();
         app.sfx.setEnabled(!app.sfx.enabled);
@@ -335,22 +422,33 @@ export class Title {
     if (this.opts?.create) {
       this.opts = {};
       this.create();
-    } else if (!this.hosting) this.net.chalk("");
+    } else if (this.hosting) this.hosted(this.hosting);
+    else this.net.chalk("");
   }
 
   async openRoom() {
+    if (this.hosting) return this.hosted(this.hosting);
     if (!(await this.app.needCallsign())) return;
     this.go("war", { mode: "host" });
   }
 
+  // The room is opened only if the player is still in the dugout when the line comes back.
   async create() {
+    const trip = this.trip;
     const code = await this.app.create();
     if (!code) return;
+    if (trip !== this.trip || this.place !== "signals") return this.app.cancelRoom();
+    this.hosted(code);
+    this.app.sfx.play("ring");
+  }
+
+  // Your own room: its code chalked up, and the sheet to share or close it.
+  hosted(code) {
     this.hosting = code;
     this.net.chalk(code);
     $("roomCode").textContent = code;
+    for (const id of ["dialSheet", "joinSheet"]) $(id).hidden = true;
     $("waitSheet").hidden = false;
-    this.app.sfx.play("ring");
     this.app.layout();
   }
 
@@ -374,8 +472,15 @@ export class Title {
 
   // Dialling a friend: the host's orders come back as a telegram to read before accepting.
   async dial(code) {
+    const trip = this.trip;
     const room = await this.app.peekRoom(code);
-    if (!room) return;
+    if (!room || trip !== this.trip || this.place !== "signals") return;
+    // Your own room's link (a reload while waiting): back to waiting in it, no invitation.
+    const me = this.app.me?.name;
+    if (me && room.host && room.host.toLowerCase() === me.toLowerCase() && !this.hosting) {
+      this.app.openRoom(code);
+      return this.hosted(code);
+    }
     this.joining = code;
     $("joinTg").innerHTML = `<p class="tg-head"><span>Field telegraph</span><em>Room ${code}</em></p><div class="tg-lines"><p><span class="tg-strip">${room.host ? `${escape(room.host)} invites you` : "You are invited"} to the field stop</span></p><p><span class="tg-strip">Orders ${escape(ordersLine(room.orders || {}))} stop</span></p></div>`;
     $("dialSheet").hidden = true;
@@ -389,13 +494,20 @@ export class Title {
     if (!this.joining) return;
     const code = this.joining;
     this.joining = null;
+    this.hosting = null;
     $("joinSheet").hidden = true;
     this.app.openRoom(code, false);
   }
 
+  decline() {
+    this.joining = null;
+    $("joinSheet").hidden = true;
+    this.app.layout();
+  }
+
   hangUp() {
     this.joining = null;
-    if (this.hosting) {
+    if (this.hosting || this.app.view.active) {
       this.hosting = null;
       this.app.cancelRoom();
     }

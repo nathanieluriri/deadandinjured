@@ -28,7 +28,7 @@ const SIGNS = [
   { key: "solo", text: "Play the computer", yaw: 0.35, y: 2.2 },
   { key: "friend", text: "Play a friend", yaw: -2.74, y: 1.9 },
   { key: "quick", text: "Quick match", yaw: -0.45, y: 1.6 },
-  { key: "board", text: "Roll of honour", yaw: 3.0, y: 1.3 },
+  { key: "board", text: "Roll of honour", yaw: -2.55, y: 1.3 },
 ];
 
 function paint(w, h, draw) {
@@ -162,13 +162,25 @@ export class Network {
     this.anchors.manual = new THREE.Vector3(x - 1.7, 0.66, z + 1.3);
     this.anchors.sound = new THREE.Vector3(x + 1.2, 0.85, z - 1.8);
     this.put(tint(slab(0.62, 0.55, 0.5), 0x7a5431), x - 1.7, 0.28, z + 1.3, 0.2);
-    this.put(join([[box(0.36, 0.08, 0.26, 0.02), 0x5e3822], [box(0.34, 0.06, 0.24, 0.01).translate(0.005, 0.005, 0), K.paper]]), x - 1.7, 0.6, z + 1.3, 0.5);
+    const book = new THREE.Group();
+    book.add(new THREE.Mesh(join([[box(0.36, 0.03, 0.26, 0.01), 0x5e3822], [box(0.34, 0.05, 0.24, 0.01).translate(0.005, 0.035, 0), K.paper]]), this.mat));
+    this.cover = new THREE.Group();
+    this.cover.position.set(-0.18, 0.07, 0);
+    this.cover.add(new THREE.Mesh(tint(box(0.36, 0.02, 0.26, 0.008), 0x5e3822).translate(0.18, 0, 0), this.mat));
+    book.add(this.cover);
+    book.position.set(x - 1.7, 0.57, z + 1.3);
+    book.rotation.y = 0.5;
+    this.group.add(book);
     this.put(join([
       [box(0.5, 0.34, 0.28, 0.03), 0x4d5433],
       [cyl(0.05, 0.05, 0.03, 12).rotateX(PI / 2).translate(-0.12, 0.04, 0.15), K.brass],
       [cyl(0.05, 0.05, 0.03, 12).rotateX(PI / 2).translate(0.1, 0.04, 0.15), K.brass],
       [cyl(0.008, 0.008, 0.6, 5).translate(0.2, 0.45, -0.08), K.metal],
     ]), x + 1.2, 0.63, z - 1.8, -0.2);
+    this.tallyMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.25, 0.5), new THREE.MeshLambertMaterial({ transparent: true, depthWrite: false, emissive: 0x9a958a }));
+    this.tallyMesh.position.set(x + 0.45, 1.36, z - 2.12);
+    this.tallyMesh.visible = false;
+    this.group.add(this.tallyMesh);
   }
 
   // The title, stencilled on a canvas banner strung between two poles over the parapet.
@@ -199,6 +211,13 @@ export class Network {
     this.bannerMesh = new THREE.Mesh(geo, mat);
     this.bannerMesh.position.set((left + right) / 2, 2.95, bz + 0.02);
     this.group.add(this.bannerMesh);
+    this.bannerH = w * (560 / 2048);
+    this.bannerTop = 2.95 + this.bannerH / 2;
+    this.bannerK = 1;
+    this.bannerRoll = new THREE.Mesh(tint(cyl(0.05, 0.05, w, 10).rotateZ(PI / 2), 0xcfc3a5), this.mat);
+    this.bannerRoll.position.set((left + right) / 2, this.bannerTop, bz + 0.04);
+    this.bannerRoll.visible = false;
+    this.group.add(this.bannerRoll);
     const rope = new THREE.CatmullRomCurve3([new THREE.Vector3(left, 3.62, bz), new THREE.Vector3((left + right) / 2, 3.5, bz + 0.02), new THREE.Vector3(right, 3.62, bz)]);
     this.parts.push(tint(new THREE.TubeGeometry(rope, 16, 0.015, 4, false), 0xb8a57a));
   }
@@ -283,6 +302,12 @@ export class Network {
     this.boardPaper.rotation.y = PI / 2;
     this.group.add(this.boardPaper);
     this.anchors.roll = new THREE.Vector3(x + 0.06, 1.25, z);
+    for (const [dz, ribbon] of [[-0.6, 0x8a2a1a], [0.47, 0x2a4a7a], [0.6, 0x6f6a2a]]) {
+      this.put(join([
+        [slab(0.012, 0.12, 0.055), ribbon],
+        [cyl(0.042, 0.042, 0.012, 14).rotateZ(PI / 2).translate(0.004, -0.095, 0), K.brass],
+      ]), x + 0.1, 1.86, z + dz);
+    }
   }
 
   // The communication trench back from the corner to the war room: sandbags on the left,
@@ -399,13 +424,17 @@ export class Network {
     this.group.add(dossier);
     this.touch.dossier = dossier;
     this.anchors.dossier = dossier.position.clone();
-    // Five crates stacked by the back wall, one for each crate the orders can give.
+    // Five toy supply crates on the map: the stack shows as many as the orders give.
     const stack = [];
     for (let i = 0; i < 5; i++) {
-      stack.push([box(0.5, 0.42, 0.42, 0.03).rotateY(i % 2 ? 0.08 : -0.06).translate((i % 3) * 0.52, 0.21 + Math.floor(i / 3) * 0.43, 0), i % 2 ? 0x7a5431 : 0x86613b]);
+      const at = (g) => g.rotateY(i % 2 ? 0.08 : -0.06).translate((i % 3) * 0.52 + (i > 2 ? 0.26 : 0), 0.21 + Math.floor(i / 3) * 0.43, 0);
+      stack.push([at(box(0.5, 0.42, 0.42, 0.03)), i % 2 ? 0x4f5733 : 0x5a6239]);
+      stack.push([at(slab(0.52, 0.07, 0.44)), 0xb7ad8a]);
     }
     const crates = new THREE.Mesh(join(stack), this.mat);
-    crates.position.set(x - 1.9, 0, z + 1.9);
+    this.crateVerts = crates.geometry.attributes.position.count / 5;
+    crates.scale.setScalar(0.34);
+    crates.position.set(x + 0.36, 0.885, z + 0.98);
     this.group.add(crates);
     this.touch.crates = crates;
     // The three supply tokens, as painted toys on the map.
@@ -422,6 +451,7 @@ export class Network {
     sm.scale.setScalar(0.3);
     sm.position.set(0.3, 0.0, -0.25);
     tokens.add(plane, sc, sm);
+    this.tokens = { recon: plane, sniper: sc, smoke: sm };
     tokens.position.set(x - 0.4, 0.9, z + 0.6);
     this.group.add(tokens);
     this.touch.tokens = tokens;
@@ -490,6 +520,12 @@ export class Network {
       [cyl(0.05, 0.05, 0.03, 12).rotateX(PI / 2).translate(0.12, 0.08, 0.19), K.brass],
       [cyl(0.05, 0.05, 0.03, 12).rotateX(PI / 2).translate(0.12, -0.07, 0.19), K.brass],
     ]), this.mat));
+    const needle = new THREE.Mesh(tint(slab(0.008, 0.085, 0.006), 0x8a2a1a).translate(0, 0.036, 0), this.mat);
+    this.needle = new THREE.Group();
+    this.needle.position.set(-0.15, 0.03, 0.198);
+    this.needle.rotation.z = 1.1;
+    this.needle.add(needle);
+    radio.add(this.needle);
     radio.position.set(x, 0.81, z + 0.9);
     radio.rotation.y = PI;
     this.group.add(radio);
@@ -598,6 +634,69 @@ export class Network {
     this.chalkboard.material.needsUpdate = true;
   }
 
+  // The war room shows the orders as they are set: a crate in the stack for each crate given,
+  // and the tokens of the supplies that are on.
+  orders(o) {
+    if (!this.touch.crates) return;
+    this.touch.crates.geometry.setDrawRange(0, this.crateVerts * o.crates);
+    for (const k in this.tokens) this.tokens[k].visible = !!o[k];
+  }
+
+  // Your record, chalked as tallies on the parapet: won above, lost below.
+  tally(p) {
+    const m = this.tallyMesh;
+    if (!m) return;
+    const won = p ? (p.wins || 0) + (p.soloWins || 0) : 0;
+    const lost = p ? (p.losses || 0) + (p.soloLosses || 0) : 0;
+    m.visible = won + lost > 0;
+    if (!m.visible) return;
+    const tex = this.tallyTex || (this.tallyTex = paint(512, 204, () => {}));
+    const c = tex.image.getContext("2d");
+    c.clearRect(0, 0, 512, 204);
+    c.strokeStyle = c.fillStyle = "rgba(236, 232, 220, 0.85)";
+    c.lineCap = "round";
+    c.font = '700 50px "Caveat", cursive';
+    c.textBaseline = "middle";
+    const r = seeded(won * 31 + lost);
+    [[won, "won", 52], [lost, "lost", 150]].forEach(([n, word, y]) => {
+      c.fillText(word, 10, y);
+      let px = 116;
+      for (let i = 0; i < Math.min(n, 15); i++) {
+        c.lineWidth = 7;
+        c.beginPath();
+        if (i % 5 === 4) {
+          c.moveTo(px - 4 * 21 - 12, y + 24 + r() * 5);
+          c.lineTo(px - 8, y - 26 + r() * 5);
+          px += 34;
+        } else {
+          c.moveTo(px + r() * 4, y - 34);
+          c.lineTo(px + r() * 5 - 2, y + 34);
+          px += 21;
+        }
+        c.stroke();
+      }
+      if (n > 15) c.fillText(`+${n - 15}`, px + 4, y);
+    });
+    tex.needsUpdate = true;
+    m.material.map = tex;
+    m.material.emissiveMap = tex;
+    m.material.needsUpdate = true;
+  }
+
+  // The field manual's cover, lifted open or closed.
+  book(open) {
+    this.bookTo = open ? 1 : 0;
+  }
+
+  furl() {
+    this.bannerK = 0;
+    this.unfurlAt = Infinity;
+  }
+
+  unfurl(delay = 0) {
+    this.unfurlAt = this.time + delay;
+  }
+
   // A plank or a prop lifts or swings a little while it is pointed at.
   hover(key, on) {
     this.swing[key] = on ? 1 : 0;
@@ -605,6 +704,24 @@ export class Network {
 
   update(dt) {
     this.time += dt;
+    const ease = 1 - Math.exp(-dt * 6);
+    if (this.cover) {
+      this.bookK = (this.bookK || 0) + ((this.bookTo || 0) - (this.bookK || 0)) * ease;
+      this.cover.rotation.z = this.bookK * 2.95;
+    }
+    if (this.needle) {
+      const to = this.searching ? Math.sin(this.time * 0.8) * 0.9 + Math.sin(this.time * 2.9) * 0.18 : 1.1;
+      this.needle.rotation.z += (to - this.needle.rotation.z) * ease;
+    }
+    if (this.bannerK < 1 && this.time >= this.unfurlAt) this.bannerK = Math.min(1, this.bannerK + dt / 1.2);
+    if (this.bannerMesh) {
+      const k = this.bannerK;
+      const e = k * k * (3 - 2 * k);
+      this.bannerMesh.scale.y = Math.max(0.02, e);
+      this.bannerMesh.position.y = this.bannerTop - (this.bannerH / 2) * this.bannerMesh.scale.y;
+      this.bannerRoll.visible = k < 1;
+      this.bannerRoll.position.y = this.bannerTop - this.bannerH * e;
+    }
     for (const s of this.signs || []) {
       const to = this.swing[s.key] || 0;
       s.k = (s.k || 0) + (to - (s.k || 0)) * (1 - Math.exp(-dt * 10));

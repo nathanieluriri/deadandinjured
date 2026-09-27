@@ -164,7 +164,7 @@ export class MatchView {
     e.over.addEventListener("scroll", () => this.scrollCue(), { passive: true });
     new ResizeObserver(() => this.scrollCue()).observe(e.telegram);
     addEventListener("keydown", (ev) => {
-      if (!this.active || document.querySelector("dialog[open]") || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+      if (!this.active || this.app.screen !== "match" || document.querySelector("dialog[open]") || ev.metaKey || ev.ctrlKey || ev.altKey) return;
       const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
       const phase = this.ended ? "over" : this.s?.phase;
       const onBar = phase === "deploy" || phase === "battle";
@@ -467,6 +467,7 @@ export class MatchView {
       this.el.turn.classList.remove("show");
       // A dropped connection can miss the "over" event: the ending then plays from the state.
       if (prev && !this.result && s.result) await this.playOver(s.result);
+      else if (!prev) await this.dir.shot("home", 0.01);
     }
     // Arriving at a match that has already ended: the verdict and the telegram are simply there.
     if (phase === "over" && !prev) {

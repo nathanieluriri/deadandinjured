@@ -63,6 +63,7 @@ class App {
   setOrders(o) {
     this.orders = cleanOrders(o);
     store("di.orders", JSON.stringify(this.orders));
+    this.network?.orders(this.orders);
     this.lobby?.setOrders(this.orders);
   }
 
@@ -89,6 +90,7 @@ class App {
     this.world.dress(await props);
     this.network = new Network(this.world.scene);
     await this.network.build();
+    this.network.orders(this.orders);
     this.stage.hooks.push((dt) => this.network.update(dt));
     this.progress(0.4);
     await frame();
@@ -358,6 +360,7 @@ class App {
   // The 3D view centres itself in whatever the panels leave open.
   layout() {
     if (!this.stage) return;
+    for (const h of this.title?.hotEls || []) h.w = 0;
     requestAnimationFrame(() => {
       let bottom = 0;
       let top = 0;
@@ -381,7 +384,7 @@ class App {
         const sheet = [...document.querySelectorAll("#menu .sheet")].find((x) => !x.hidden);
         bottom = sheet ? innerHeight - sheet.getBoundingClientRect().top : 0;
       }
-      this.stage.setInset(Math.round(top), Math.round(bottom), this.screen === "match");
+      this.stage.setInset(Math.round(top), Math.round(bottom), this.screen === "match" || this.screen === "menu");
     });
   }
 
@@ -440,6 +443,7 @@ class App {
   renderWho() {
     const w = $("who");
     const p = this.me;
+    this.network?.tally(p);
     const intro = `<button type="button" class="link" data-act="intro">Replay the intro</button>`;
     if (!p) {
       w.innerHTML = `<span>No callsign yet. You get one the first time you play someone live.</span><button type="button" class="link" data-act="signin">Sign in</button>${intro}`;
@@ -492,8 +496,13 @@ class App {
 
   // A room waits in the signals dugout; once both sides are in, the match takes the screen.
   onPhase(phase) {
-    if (phase === "lobby") return;
-    if (this.screen !== "match") this.show("match");
+    if (phase === "lobby" || this.screen === "match") return;
+    this.show("match");
+    // Joined into a match already under way: no walk out of the trench, and no commanders.
+    if (phase !== "supply") {
+      this.title.leave();
+      this.parade(false);
+    }
   }
 
   async needCallsign(signIn = false) {

@@ -69,6 +69,7 @@ export class Sfx {
     this.white = this.noise(2, "white");
     this.brown = this.noise(4, "brown");
     this.ambience();
+    this.place(this.placeName);
     this.scheduler = setInterval(() => this.schedule(), 25);
     this.nextStep = ctx.currentTime + 0.1;
     document.addEventListener("visibilitychange", () => {
@@ -117,6 +118,17 @@ export class Sfx {
 
   mood(name) {
     this.moodName = name;
+  }
+
+  // Each place on the title sounds like itself: wind in the open trench, a stove ticking in
+  // the dugouts, static and call signs at the radio post.
+  place(name) {
+    this.placeName = name;
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const inside = name === "war" || name === "signals";
+    this.windLevel.gain.setTargetAtTime(inside ? 0.3 : 1, t, 0.5);
+    this.staticGain.gain.setTargetAtTime(name === "radio" ? 0.035 : 0, t, 0.4);
   }
 
   play(name, o = {}) {
@@ -609,6 +621,20 @@ export class Sfx {
     }
   }
 
+  // A boot on the duckboards, with a little grit.
+  s_step(o, t) {
+    const out = this.out({ pan: rnd(-0.25, 0.25) }, t, { verb: 0.08, gain: 0.3 });
+    this.thump(t, out, rnd(120, 150), 60, 0.1, 0.55);
+    this.hiss(t, out, { type: "bandpass", f: rnd(700, 1100), q: 1.1, peak: 0.3, d: 0.08 });
+  }
+
+  // Canvas unrolling and snapping taut.
+  s_unfurl(o, t) {
+    const out = this.out(o, t, { verb: 0.2, gain: 0.35 });
+    this.hiss(t, out, { type: "bandpass", f: 500, to: 1600, q: 0.8, a: 0.25, peak: 0.5, d: 0.6 });
+    this.hiss(t + 0.9, out, { type: "bandpass", f: 900, q: 1.5, peak: 0.8, d: 0.12 });
+  }
+
   s_hover(o, t) {
     const now = performance.now();
     if (now - this.lastHover < 60) return;
@@ -815,10 +841,18 @@ export class Sfx {
     const lg2 = ctx.createGain();
     lg2.gain.value = 0.1;
     lfo2.connect(lg2).connect(g.gain);
-    src.connect(bp).connect(g).connect(this.ambBus);
+    this.windLevel = ctx.createGain();
+    src.connect(bp).connect(g).connect(this.windLevel).connect(this.ambBus);
     src.start();
     lfo.start();
     lfo2.start();
+    const air = ctx.createBufferSource();
+    air.buffer = this.white;
+    air.loop = true;
+    this.staticGain = ctx.createGain();
+    this.staticGain.gain.value = 0;
+    air.connect(this.filter("bandpass", 2200, 0.5)).connect(this.staticGain).connect(this.ambBus);
+    air.start();
 
     const drone = ctx.createGain();
     drone.gain.value = 0.045;
@@ -865,6 +899,18 @@ export class Sfx {
     }
   }
 
+  crackle(t) {
+    const out = this.out({ bus: this.ambBus, pan: rnd(-0.3, 0.3) }, t, { verb: 0.05, gain: 0.12 });
+    this.hiss(t, out, { type: "bandpass", f: rnd(1800, 3400), q: 1.4, peak: rnd(0.3, 1), d: rnd(0.015, 0.05) });
+  }
+
+  blip(t) {
+    const out = this.out({ bus: this.ambBus, pan: 0.2 }, t, { verb: 0.1, gain: 0.05 });
+    const long = Math.random() < 0.4;
+    const v = this.vca(t, 0.004, 1, long ? 0.18 : 0.06, out);
+    this.osc("sine", 880, t, long ? 0.2 : 0.08, v);
+  }
+
   // A march on a sixteenth-note grid, scheduled a little ahead of the audio clock.
   schedule() {
     const ctx = this.ctx;
@@ -878,7 +924,11 @@ export class Sfx {
       if (m === "menu") {
         if (s === 0 && this.step % 64 === 0) this.timpani(t, 73.4, 0.5);
         if (s >= 24 && this.step % 64 >= 32) this.snare(t, 0.03 + (s - 24) * 0.012);
-        if (Math.random() < 0.04) this.cricket(t);
+        const at = this.placeName;
+        if (at === "war" || at === "signals") {
+          if (Math.random() < 0.05) this.crackle(t);
+        } else if (Math.random() < 0.04) this.cricket(t);
+        if (at === "radio" && s % 8 === 0 && Math.random() < 0.35) this.blip(t);
       } else if (m === "battle" || m === "tension") {
         const pat = [1, 0, 0, 0.4, 0.7, 0, 0.5, 0, 1, 0, 0, 0.4, 0.8, 0.5, 0.6, 0.5];
         const g = pat[s % 16];
