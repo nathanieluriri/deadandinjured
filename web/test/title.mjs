@@ -84,8 +84,9 @@ for (const [w, h] of [[390, 844], [844, 390], [1440, 900]]) {
         const ny = (x1 - x0) / len;
         const style = h.el.style;
         if (parseFloat(style.width) < 44 || parseFloat(style.height) < 44) bad.push(`${h.label} is ${style.width} by ${style.height}`);
+        // Off the line only away from the post, where the dog tag hangs beside the planks' roots.
         for (const f of [0.15, 0.5, 0.85]) {
-          for (const off of [-12, 0, 12]) {
+          for (const off of f < 0.3 ? [0] : [-12, 0, 12]) {
             const x = x0 + (x1 - x0) * f + nx * off;
             const y = y0 + (y1 - y0) * f + ny * off;
             if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) continue;

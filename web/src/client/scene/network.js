@@ -274,8 +274,8 @@ export class Network {
       [box(0.09, 0.14, 0.01, 0.02), 0xb8b3a6],
       [cyl(0.004, 0.004, 0.22, 4).rotateZ(0.6).translate(-0.03, 0.12, 0), 0x8a857c],
     ]);
-    this.put(tag, sx + 0.08, 0.82, sz + 0.075);
-    this.anchors.tag = new THREE.Vector3(sx + 0.08, 0.82, sz + 0.08);
+    this.put(tag, sx + 0.08, 1.05, sz + 0.075);
+    this.anchors.tag = new THREE.Vector3(sx + 0.08, 1.05, sz + 0.08);
     this.signs = SIGNS.map((s, i) => {
       const shape = new THREE.Shape();
       const L = 1.55;
