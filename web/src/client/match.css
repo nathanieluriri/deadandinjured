@@ -496,7 +496,7 @@ body[data-screen="match"] #manualBtn, body[data-screen="match"] #soundBtn, body[
 .taunts button:focus-visible { box-shadow: inset 0 0 0 2px var(--ink-blue); }
 
 /* ---- the pause menu: orders on a clipboard ------------------------------------------------ */
-.pause { padding: 0; border: 0; margin: calc(var(--pad) + var(--top) + 54px) var(--pad) auto auto; width: min(360px, calc(100vw - 24px)); max-height: calc(100svh - 90px); overflow: visible; background: transparent; color: var(--ink-paper); }
+.pause { padding: 0; border: 0; margin: calc(var(--pad) + var(--top) + 54px) var(--padR) auto auto; width: min(360px, calc(100vw - 24px)); max-height: calc(100svh - 90px); overflow: visible; background: transparent; color: var(--ink-paper); }
 .pause::backdrop { background: radial-gradient(120% 90% at 80% 10%, rgba(10, 8, 6, 0.35), rgba(10, 8, 6, 0.72)); }
 .pause[open] { animation: slip 0.5s var(--out); }
 @keyframes slip { from { opacity: 0; transform: translateY(-30px) rotate(2deg); } to { opacity: 1; transform: none; } }
@@ -705,7 +705,7 @@ body.cine .hud, body.cine .desk, body.cine .bar, body.cine .note, body.cine .top
 .vd-ink span { font: 700 clamp(11px, 1.3vw, 17px)/1 var(--typed); letter-spacing: 0.24em; text-transform: uppercase; }
 .vd-ink span:empty { display: none; }
 @media (min-width: 900px) {
-  .verdict { right: calc(min(430px, 100vw - 2 * var(--pad)) + var(--pad)); }
+  .verdict { right: calc(min(430px, 100vw - 2 * var(--pad)) + var(--padR)); }
 }
 /* Phones upright: the telegram rises from the plank and the scene moves up above it. */
 @media (max-width: 899px) {

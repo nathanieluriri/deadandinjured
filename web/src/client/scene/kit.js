@@ -29,7 +29,8 @@ export const box = (w, h, d, r = 0.02) => {
   const key = `${w} ${h} ${d} ${r}`;
   let g = boxes.get(key);
   if (!g) boxes.set(key, (g = new RoundedBoxGeometry(w, h, d, 2, Math.min(r, w / 2 - 0.001, h / 2 - 0.001, d / 2 - 0.001))));
-  return g.clone();
+  // A plain copy: cloning a RoundedBoxGeometry would first build a default one.
+  return new THREE.BufferGeometry().copy(g);
 };
 export const cyl = (a, b, h, n = 16) => new THREE.CylinderGeometry(a, b, h, n);
 const PI = Math.PI;

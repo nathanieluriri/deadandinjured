@@ -83,7 +83,8 @@ function stencil(x, text, cx, cy, size, colour, { spray = 0.18, font = "Stardos 
   x.textBaseline = "middle";
   x.fillStyle = colour;
   x.shadowColor = colour;
-  x.shadowBlur = size * 0.05;
+  // A canvas shadow's blur is in device pixels, whatever the drawing is scaled by.
+  x.shadowBlur = size * 0.05 * x.getTransform().a;
   x.globalAlpha = spray;
   x.fillText(text, cx + 1.5, cy + 1, max);
   x.globalAlpha = 0.92;
@@ -129,6 +130,7 @@ export class Network {
   async build() {
     await Promise.race([document.fonts?.load('700 64px "Stardos Stencil"'), new Promise((r) => setTimeout(r, 2000))]);
     const [dead, injured] = await Promise.all([loadImage("/logo-dead.png"), loadImage("/logo-injured.png")]);
+    const start = performance.now();
     this.corner();
     this.banner(dead, injured);
     this.signpost();
@@ -156,6 +158,7 @@ export class Network {
     sacks.computeBoundingSphere();
     this.group.add(sacks);
     this.sacks = [];
+    performance.measure("trench", { start });
   }
 
   // The trench corner: a bay where the trench turns back from the line, with a sandbag

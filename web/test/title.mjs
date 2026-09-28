@@ -206,14 +206,13 @@ for (const [w, h] of [[390, 844], [844, 390], [1440, 900]]) {
   await B0.close();
   const inBattle = (p) => p.waitForFunction(() => window.__app.screen === "match" && window.__app.view.s?.phase === "battle", null, { timeout: 120000, polling: 250 });
   const clean = (s) => s.screen === "match" && !s.place && !s.busy && !s.hots && !s.paraded && !s.plates && !s.ranks;
-  await A.bringToFront();
-  await enter(A, `/r/${code}`);
+  // Both load together: with nobody firing, the turn clock ends the match in a few minutes.
+  await Promise.all([enter(A, `/r/${code}`), enter(B, `/r/${code}`)]);
   await inBattle(A);
   await sleep(2000);
   let s = await title(A);
   check(clean(s), "the host goes straight back into the battle", s);
   await B.bringToFront();
-  await enter(B, `/r/${code}`);
   await at(B, "signals");
   await B.waitForFunction(() => !document.getElementById("joinSheet").hidden, null, { timeout: 60000 });
   await click(B, "joinAccept");

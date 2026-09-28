@@ -90,9 +90,7 @@ class App {
     this.world = new World(this.stage);
     this.world.dress(await props);
     this.network = new Network(this.world.scene);
-    const built = performance.now();
     await this.network.build();
-    performance.measure("trench", { start: built });
     this.network.orders(this.orders);
     this.stage.hooks.push((dt) => this.network.update(dt));
     this.progress(0.4);
