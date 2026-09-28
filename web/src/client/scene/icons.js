@@ -17,6 +17,9 @@ const K = {
 
 const PI = Math.PI;
 const blob = (r) => new THREE.IcosahedronGeometry(r, 1);
+const coarse = matchMedia("(pointer: coarse)").matches;
+// The layer of everything drawn on the bar's own canvas on a phone.
+const BAR = 1;
 
 function gun() {
   const parts = [];
@@ -335,18 +338,20 @@ function vignette(kind) {
 }
 
 export class IconDeck {
-  constructor(stage, { environment = null, props = null } = {}) {
+  constructor(stage, { environment = null, props = null, envFor = null } = {}) {
     this.stage = stage;
     this.props = props;
     this.scene = new THREE.Scene();
     this.scene.environment = environment;
     this.scene.environmentIntensity = 0.75;
-    this.scene.add(new THREE.HemisphereLight(0xffdcc0, 0x3a3040, 0.85));
+    const sky = new THREE.HemisphereLight(0xffdcc0, 0x3a3040, 0.85);
     const key = new THREE.DirectionalLight(0xffb07a, 2.7);
     key.position.set(-1.1, 1.3, 1.6);
     const rim = new THREE.DirectionalLight(0x9fb4ff, 0.9);
     rim.position.set(1.5, 0.4, -1);
-    this.scene.add(key, rim);
+    for (const l of [sky, key, rim]) l.layers.enable(BAR);
+    this.scene.add(sky, key, rim);
+    this.bar = coarse && envFor ? this.barCanvas(envFor) : null;
     this.camera = new THREE.OrthographicCamera(0, 1, 0, -1, -4000, 4000);
     this.camera.position.z = 1000;
     this.items = new Map();
@@ -364,6 +369,74 @@ export class IconDeck {
 
   get active() {
     return this.on;
+  }
+
+  // On a phone the bar's icons get a canvas of their own at the screen's full density, so they
+  // stay sharp while the field below lowers its resolution to keep up.
+  barCanvas(envFor) {
+    const canvas = document.createElement("canvas");
+    canvas.className = "bar-icons";
+    canvas.setAttribute("aria-hidden", "true");
+    document.getElementById("gl").after(canvas);
+    const r = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "high-performance", stencil: false });
+    r.outputColorSpace = THREE.SRGBColorSpace;
+    r.toneMapping = THREE.ACESFilmicToneMapping;
+    r.toneMappingExposure = 1.1;
+    r.debug.checkShaderErrors = false;
+    r.setClearColor(0x000000, 0);
+    const camera = new THREE.OrthographicCamera(0, 1, 0, -1, -4000, 4000);
+    camera.position.z = 1000;
+    camera.layers.set(BAR);
+    const bar = { el: document.getElementById("bar"), canvas, r, camera, env: envFor(r), box: "", shown: false };
+    canvas.addEventListener("webglcontextrestored", () => {
+      bar.env = envFor(r);
+      bar.box = "";
+    });
+    return bar;
+  }
+
+  showBar(on) {
+    const b = this.bar;
+    if (!b || b.shown === on) return;
+    b.shown = on;
+    b.canvas.style.display = on ? "block" : "";
+  }
+
+  // Everything on the bar, drawn from just above it to the foot of the screen.
+  drawBar() {
+    const b = this.bar;
+    const r = b.el.offsetParent !== null ? b.el.getBoundingClientRect() : null;
+    if (!r || r.height < 2) return this.showBar(false);
+    const top = Math.max(0, Math.floor(r.top) - 40);
+    const w = innerWidth;
+    const h = Math.max(1, innerHeight - top);
+    const dpr = Math.min(devicePixelRatio || 1, 3);
+    const box = `${top},${w},${h},${dpr}`;
+    if (box !== b.box) {
+      b.box = box;
+      b.r.setPixelRatio(dpr);
+      b.r.setSize(w, h);
+      b.canvas.style.top = `${top}px`;
+      Object.assign(b.camera, { left: 0, right: w, top: -top, bottom: -(top + h) });
+      b.camera.updateProjectionMatrix();
+    }
+    this.showBar(true);
+    this.withBarEnv(() => b.r.render(this.scene, b.camera));
+  }
+
+  // The bar's canvas is a separate context, so it lights the icons with its own copy of the sky.
+  withBarEnv(f) {
+    const env = this.scene.environment;
+    this.scene.environment = this.bar.env.texture;
+    try {
+      return f();
+    } finally {
+      this.scene.environment = env;
+    }
+  }
+
+  compileBar() {
+    return this.withBarEnv(() => this.bar.r.compileAsync(this.scene, this.bar.camera));
   }
 
   resize() {
@@ -398,6 +471,7 @@ export class IconDeck {
     lock.scale.setScalar(1.05 / root.userData.k);
     lock.position.set(0.34 / root.userData.k, -0.3 / root.userData.k, 0.6 / root.userData.k);
     holder.add(lock);
+    if (this.bar && el.closest("#bar")) root.traverse((o) => o.layers.set(BAR));
     root.visible = false;
     this.scene.add(root);
     const item = {
@@ -437,6 +511,7 @@ export class IconDeck {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.82, metalness: 0, color: 0xd8cbb8 }));
     mesh.rotation.x = -0.32;
     mesh.visible = false;
+    if (this.bar && el.closest("#bar")) mesh.layers.set(BAR);
     this.scene.add(mesh);
     this.boards.set(key, { el, mesh, tex, w: 0, h: 0 });
   }
@@ -445,6 +520,28 @@ export class IconDeck {
   // an opaque card above the field, so it gets a small canvas of its own, made the first time
   // a supply is opened and moved from photo to photo.
   preview(kind, el) {
+    this.makeFilm();
+    this.vignettes[kind] ||= vignette(kind);
+    for (const v of Object.values(this.vignettes)) v.group.visible = false;
+    const v = this.vignettes[kind];
+    if (!v.group.parent) this.film.scene.add(v.group);
+    if (this.film.canvas.parentNode !== el) el.append(this.film.canvas);
+    this.shown = { kind, el, v };
+  }
+
+  // Made ahead on a phone, so the first dossier opened does not stall on a new context and its
+  // shaders.
+  warmFilm() {
+    this.makeFilm();
+    for (const kind of ["recon", "sniper", "smoke"]) {
+      const v = (this.vignettes[kind] ||= vignette(kind));
+      v.group.visible = false;
+      if (!v.group.parent) this.film.scene.add(v.group);
+    }
+    return this.film.r.compileAsync(this.film.scene, this.film.camera);
+  }
+
+  makeFilm() {
     if (!this.film) {
       const canvas = document.createElement("canvas");
       canvas.className = "film";
@@ -460,12 +557,6 @@ export class IconDeck {
       const camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, -10, 10);
       this.film = { canvas, r, scene, camera, w: 0, h: 0 };
     }
-    this.vignettes[kind] ||= vignette(kind);
-    for (const v of Object.values(this.vignettes)) v.group.visible = false;
-    const v = this.vignettes[kind];
-    if (!v.group.parent) this.film.scene.add(v.group);
-    if (this.film.canvas.parentNode !== el) el.append(this.film.canvas);
-    this.shown = { kind, el, v };
   }
 
   setPulse(key, on) {
@@ -481,7 +572,7 @@ export class IconDeck {
   }
 
   update(dt) {
-    if (!this.on) return;
+    if (!this.on) return this.showBar(false);
     this.time += dt;
     for (const it of this.items.values()) {
       const el = it.el;
@@ -529,6 +620,7 @@ export class IconDeck {
       b.mesh.position.set(r.left + r.width / 2, -(r.top + r.height / 2), -120);
     }
     this.vignette(dt);
+    if (this.bar) this.drawBar();
   }
 
   vignette(dt) {

@@ -5,6 +5,9 @@ const DTMF = {
 };
 const NOTE = { G3: 196, C4: 261.63, E4: 329.63, G4: 392, C5: 523.25, E5: 659.25, G5: 783.99, C3: 130.81, E3: 164.81 };
 const rnd = (a, b) => a + Math.random() * (b - a);
+// Phones get a larger audio buffer, a shorter reverb and a longer look-ahead for the score: the
+// smallest buffers and a long convolution are what make a phone's audio crackle.
+const coarse = matchMedia("(pointer: coarse)").matches;
 
 let store = null;
 try { store = window.localStorage; } catch {}
@@ -34,7 +37,8 @@ export class Sfx {
     }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
-    const ctx = new AC({ latencyHint: "interactive" });
+    this.session();
+    const ctx = new AC({ latencyHint: coarse ? "playback" : "interactive" });
     this.ctx = ctx;
     this.master = ctx.createGain();
     this.master.gain.value = this.enabled ? 0.9 : 0;
@@ -55,7 +59,7 @@ export class Sfx {
     this.ambBus.gain.value = this.effects ? 0.7 : 0;
     this.ambBus.connect(this.master);
     this.verb = ctx.createConvolver();
-    this.verb.buffer = this.impulse(2.8);
+    this.verb.buffer = this.impulse(coarse ? 1.2 : 2.8);
     const vg = ctx.createGain();
     vg.gain.value = 0.42;
     this.verb.connect(vg).connect(this.master);
@@ -77,6 +81,21 @@ export class Sfx {
       if (document.hidden) this.ctx.suspend();
       else if (this.enabled && !this.frozen) this.ctx.resume();
     });
+    // A phone can stop the sound on its own (a call, the lock screen, another app), and iOS only
+    // lets it start again from a tap, so the next tap or key brings it back.
+    const wake = () => {
+      if (this.enabled && !this.frozen && !document.hidden && this.ctx.state !== "running") this.ctx.resume().catch(() => {});
+    };
+    for (const ev of ["pointerdown", "touchend", "keydown"]) addEventListener(ev, wake, { capture: true, passive: true });
+  }
+
+  // On an iPhone the ringer switch silences web audio unless the page asks to play like a video.
+  // It does so while the game's sound is on, and mixes in quietly when it is off.
+  session() {
+    if (!coarse || !navigator.audioSession) return;
+    try {
+      navigator.audioSession.type = this.enabled ? "playback" : "ambient";
+    } catch {}
   }
 
   setEffects(on) {
@@ -109,6 +128,7 @@ export class Sfx {
   setEnabled(on) {
     this.enabled = on;
     try { store?.setItem("di.sound", on ? "on" : "off"); } catch {}
+    this.session();
     if (!this.ctx) return;
     if (on && this.ctx.state !== "running") this.ctx.resume();
     const t = this.ctx.currentTime;
@@ -917,7 +937,7 @@ export class Sfx {
     if (!ctx || ctx.state !== "running") return;
     const bpm = this.moodName === "tension" ? 112 : 96;
     const sixteenth = 60 / bpm / 4;
-    while (this.nextStep < ctx.currentTime + 0.12) {
+    while (this.nextStep < ctx.currentTime + (coarse ? 0.25 : 0.12)) {
       const t = this.nextStep;
       const s = this.step % 32;
       const m = this.moodName;
