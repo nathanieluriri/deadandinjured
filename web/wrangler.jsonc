@@ -25,5 +25,6 @@
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["Room", "Lobby"] }
   ],
+  "vars": { "GOOGLE_CLIENT_ID": "513931555173-6eikfnac9r5jbfhrn5bll32s48ii5ina.apps.googleusercontent.com" },
   "observability": { "enabled": true }
 }

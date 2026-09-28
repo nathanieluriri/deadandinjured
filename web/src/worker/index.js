@@ -1,6 +1,7 @@
 import { Room } from "./room.js";
 import { Lobby } from "./lobby.js";
 import { currentPlayer, startSession, endSession, cookieFor, enlist, login, hashPassword, publicPlayer } from "./auth.js";
+import { googleReady, googleStart, googleCallback, pendingGoogle, linkGoogle, clearPending } from "./google.js";
 import { roomCode, ROOM_RE, cleanOrders } from "../shared/rules.js";
 
 export { Room, Lobby };
@@ -22,31 +23,38 @@ async function body(req) {
   }
 }
 
-async function signedIn(env, url, id, status = 200) {
+async function signedIn(req, env, url, id, status = 200) {
   const token = await startSession(env, id);
+  const sub = await pendingGoogle(req, env);
+  const linked = !!sub && (await linkGoogle(env, id, sub));
   const p = await env.DB.prepare("SELECT * FROM players WHERE id = ?1").bind(id).first();
-  return json({ player: publicPlayer(p) }, status, { "Set-Cookie": cookieFor(token, url) });
+  const res = json({ player: publicPlayer(p), linked }, status, { "Set-Cookie": cookieFor(token, url) });
+  if (sub) res.headers.append("Set-Cookie", clearPending(url));
+  return res;
 }
 
 async function api(req, env, url) {
   const path = url.pathname;
   if (req.method === "POST" && !sameOrigin(req, url)) return json({ error: "Bad origin" }, 403);
 
-  if (path === "/api/me" && req.method === "GET") return json({ player: publicPlayer(await currentPlayer(req, env)) });
+  if (path === "/api/me" && req.method === "GET") return json({ player: publicPlayer(await currentPlayer(req, env)), google: googleReady(env) });
+
+  if (path === "/api/auth/google" && req.method === "GET") return googleStart(req, env, url);
+  if (path === "/api/auth/google/callback" && req.method === "GET") return googleCallback(req, env, url);
 
   if (path === "/api/enlist" && req.method === "POST") {
     const me = await currentPlayer(req, env);
     if (me) return json({ player: publicPlayer(me) });
     const r = await enlist(env, (await body(req)).name);
     if (r.error) return json({ error: r.error }, 409);
-    return signedIn(env, url, r.id, 201);
+    return signedIn(req, env, url, r.id, 201);
   }
 
   if (path === "/api/login" && req.method === "POST") {
     const b = await body(req);
     const r = await login(env, b.name, b.password);
     if (r.error) return json({ error: r.error }, 401);
-    return signedIn(env, url, r.id);
+    return signedIn(req, env, url, r.id);
   }
 
   if (path === "/api/logout" && req.method === "POST") {

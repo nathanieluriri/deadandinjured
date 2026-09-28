@@ -59,6 +59,13 @@ class App {
     let saved = null;
     try { saved = JSON.parse(store("di.orders") || "null"); } catch {}
     this.orders = cleanOrders(saved || STANDARD_ORDERS);
+    const q = new URLSearchParams(location.search);
+    this.googleSaid = q.get("google");
+    this.googleNew = this.googleSaid === "new";
+    if (this.googleSaid) {
+      q.delete("google");
+      history.replaceState(null, "", location.pathname + (String(q) ? `?${q}` : ""));
+    }
   }
 
   setOrders(o) {
@@ -122,7 +129,9 @@ class App {
     await textures;
     this.layout();
     await Promise.race([document.fonts?.ready, new Promise((r) => setTimeout(r, 1500))]);
-    this.me = (await api("/api/me").catch(() => ({ player: null }))).player;
+    const me = await api("/api/me").catch(() => ({ player: null }));
+    this.me = me.player;
+    this.googleOn = !!me.google;
     this.renderWho();
     this.progress(1);
     this.hud.onResize = () => this.placePre();
@@ -177,8 +186,9 @@ class App {
     document.body.classList.remove("is-pre");
     this.sfx.mood("menu");
     const room = location.pathname.match(/^\/r\/([A-Za-z0-9]{5})\/?$/);
-    this.menu(true, !room);
+    this.menu(true, !room && !this.googleSaid);
     if (room) this.title.link(room[1].toUpperCase());
+    this.googleSays(!room);
   }
 
   show(name) {
@@ -422,6 +432,8 @@ class App {
     $("enlistSwap").addEventListener("click", () => this.enlistMode(!this.signingIn));
     $("enlistCancel").addEventListener("click", () => $("enlistDlg").close("cancel"));
     $("enlistForm").addEventListener("submit", (e) => this.enlistSubmit(e));
+    $("enlistDlg").addEventListener("close", () => (this.googleNew = false));
+    for (const b of document.querySelectorAll("[data-google]")) b.addEventListener("click", () => this.google("in"));
     $("secureForm").addEventListener("submit", (e) => this.secureSubmit(e));
     $("who").addEventListener("click", (e) => {
       const a = e.target.closest("[data-act]");
@@ -430,6 +442,7 @@ class App {
       if (a.dataset.act === "secure") $("secureDlg").showModal();
       if (a.dataset.act === "signin") this.needCallsign(true);
       if (a.dataset.act === "signout") this.signOut();
+      if (a.dataset.act === "google") this.google(this.me ? "link" : "in");
     });
     if (fine) {
       document.addEventListener("pointerover", (e) => {
@@ -449,14 +462,35 @@ class App {
     const p = this.me;
     this.network?.tally(p);
     const intro = reduced() ? "" : `<button type="button" class="link" data-act="intro">Replay the intro</button>`;
+    const google = this.googleOn && !p?.google ? `<button type="button" class="link" data-act="google">${p ? "Link Google" : "Sign in with Google"}</button>` : "";
     if (!p) {
-      w.innerHTML = `<span>No callsign yet. You get one the first time you play someone live.</span><button type="button" class="link" data-act="signin">Sign in</button>${intro}`;
+      w.innerHTML = `<span>No callsign yet. You get one the first time you play someone live.</span>${google}<button type="button" class="link" data-act="signin">Sign in</button>${intro}`;
       return;
     }
     const rec = p.wins + p.losses + p.draws ? `${p.wins} won, ${p.losses} lost${p.draws ? `, ${p.draws} drawn` : ""}` : "no live matches yet";
     const solo = (p.soloWins || 0) + (p.soloLosses || 0) + (p.soloDraws || 0) ? `Against the computer ${p.soloWins || 0} won, ${p.soloLosses || 0} lost, ${p.soloDraws || 0} drawn` : "";
-    w.innerHTML = `<span>Callsign <b>${escapeHtml(p.name)}</b></span><span>${rec}</span>${solo ? `<span>${solo}</span>` : ""}` +
+    w.innerHTML = `<span>Callsign <b>${escapeHtml(p.name)}</b></span><span>${rec}</span>${solo ? `<span>${solo}</span>` : ""}${google}` +
       (p.secured ? `<button type="button" class="link" data-act="signout">Sign out</button>` : `<button type="button" class="link" data-act="secure">Add a password</button>`) + intro;
+  }
+
+  // Leaves the page for Google, which sends the browser back to the room being dialled or the corner.
+  google(mode) {
+    location.assign(`/api/auth/google?${new URLSearchParams({ mode, next: this.dialing ? `/r/${this.dialing}` : "/" })}`);
+  }
+
+  googleSays(ask) {
+    const said = this.googleSaid;
+    this.googleSaid = null;
+    const note = {
+      in: this.me && `Signed in as ${this.me.name}`,
+      linked: "Google linked. Sign in with it on any device.",
+      has: "This callsign already has a Google account",
+      taken: "That Google account belongs to another callsign",
+      fail: "Google sign-in did not go through. Try again.",
+      off: "Google sign-in is not set up here",
+    }[said];
+    if (note) this.toast(note);
+    if (said === "new" && ask && !this.me) this.needCallsign();
   }
 
   async refreshMe() {
@@ -530,7 +564,10 @@ class App {
     this.signingIn = signIn;
     $("enlistTitle").textContent = signIn ? "sign.in" : "enlist";
     $("enlistHead").textContent = signIn ? "Welcome back" : "Pick a callsign";
-    $("enlistText").textContent = signIn ? "Sign in with your callsign and password." : "It is the name your opponents see and the one on the leaderboard.";
+    $("enlistText").textContent = this.googleNew
+      ? signIn ? "Sign in once with your callsign and password to link your Google account." : "Your Google account is ready. Pick the callsign to go with it."
+      : signIn ? "Sign in with your callsign and password." : "It is the name your opponents see and the one on the leaderboard.";
+    $("enlistGoogle").hidden = !this.googleOn || this.googleNew;
     $("passField").hidden = !signIn;
     $("enlistPass").required = signIn;
     $("enlistGo").textContent = signIn ? "Sign in" : "Enlist";
@@ -549,6 +586,7 @@ class App {
       this.renderWho();
       this.sfx.play("lock");
       $("enlistDlg").close("ok");
+      if (r.linked) this.toast("Google linked. Sign in with it on any device.");
     } catch (err) {
       $("enlistErr").textContent = err.message;
       this.sfx.play("error");
@@ -610,7 +648,10 @@ class App {
       this.toast("Room codes are five letters and digits");
       return null;
     }
-    if (!(await this.needCallsign())) return null;
+    this.dialing = code;
+    const ready = await this.needCallsign();
+    this.dialing = null;
+    if (!ready) return null;
     try {
       const { room } = await api(`/api/rooms/${code}`);
       if (!room) this.toast("No room with that code");

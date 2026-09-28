@@ -7,9 +7,9 @@ const SESSION_DAYS = 180;
 const ROUNDS = 25000;
 const enc = new TextEncoder();
 
-const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-const random = (n) => b64u(crypto.getRandomValues(new Uint8Array(n)));
-const sha256 = async (s) => b64u(await crypto.subtle.digest("SHA-256", enc.encode(s)));
+export const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+export const random = (n) => b64u(crypto.getRandomValues(new Uint8Array(n)));
+export const sha256 = async (s) => b64u(await crypto.subtle.digest("SHA-256", enc.encode(s)));
 
 async function pbkdf2(password, salt, rounds, pepper) {
   const key = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);
@@ -17,7 +17,7 @@ async function pbkdf2(password, salt, rounds, pepper) {
   return b64u(bits);
 }
 
-function same(a, b) {
+export function same(a, b) {
   if (a.length !== b.length) return false;
   let x = 0;
   for (let i = 0; i < a.length; i++) x |= a.charCodeAt(i) ^ b.charCodeAt(i);
@@ -94,7 +94,7 @@ export async function login(env, raw, password) {
 export function publicPlayer(p) {
   if (!p) return null;
   return {
-    id: p.id, name: p.name, secured: !!p.pass_hash,
+    id: p.id, name: p.name, secured: !!(p.pass_hash || p.google), google: !!p.google,
     wins: p.wins, losses: p.losses, draws: p.draws, kills: p.kills, best: p.best,
     soloWins: p.solo_wins, soloLosses: p.solo_losses, soloDraws: p.solo_draws ?? 0,
   };
