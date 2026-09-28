@@ -134,21 +134,26 @@ export class World {
 
   // After a context loss the old target's GL objects are already gone, so it is dropped, not disposed.
   environment(restored = false) {
-    const r = this.stage.renderer;
+    if (!restored) this.envRT?.dispose();
+    this.envRT = this.envFor(this.stage.renderer);
+    this.scene.environment = this.envRT.texture;
+    this.scene.environmentIntensity = 0.55;
+  }
+
+  // The dusk sky and the ground as reflected light, made for any renderer's own context.
+  envFor(r) {
     const pm = new THREE.PMREMGenerator(r);
     const envScene = new THREE.Scene();
     const sky = new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), this.skyMat);
     envScene.add(sky);
     const ground = new THREE.Mesh(new THREE.CircleGeometry(9, 24).rotateX(-Math.PI / 2).translate(0, -1.2, 0), new THREE.MeshBasicMaterial({ color: 0x2b2519 }));
     envScene.add(ground);
-    if (!restored) this.envRT?.dispose();
-    this.envRT = pm.fromScene(envScene, 0.035);
-    this.scene.environment = this.envRT.texture;
-    this.scene.environmentIntensity = 0.55;
+    const rt = pm.fromScene(envScene, 0.035);
     pm.dispose();
     sky.geometry.dispose();
     ground.geometry.dispose();
     ground.material.dispose();
+    return rt;
   }
 
   // The ground: an indexed grid, dense where the fighting is and coarse toward the hills, lit flat

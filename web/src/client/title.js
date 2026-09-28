@@ -394,15 +394,19 @@ export class Title {
       p.project(cam);
       return [((p.x + 1) / 2) * W, ((1 - p.y) / 2) * H, p.z];
     };
+    // Only what changed is written: a size that changes costs the page a layout.
+    const put = (h, k, v) => {
+      const last = (h.last ||= {});
+      if (last[k] !== v) h.el.style[k] = last[k] = v;
+    };
     for (const h of this.hotEls) {
       const a = this.net.anchors[h.key];
       if (!a) continue;
       const [ax, ay, az] = at(v.copy(a));
       const off = az > 1 || ax < -0.05 * W || ax > 1.05 * W || ay < -0.05 * H || ay > 1.05 * H;
-      const st = h.el.style;
-      st.visibility = off ? "hidden" : "";
+      put(h, "visibility", off ? "hidden" : "");
       // Small objects (the dog tag on the signpost) stay above the planks' long buttons.
-      st.zIndex = String(Math.round((1 - az) * 1e5) + (this.net.boxes[h.key] ? 0 : 2e5));
+      put(h, "zIndex", String(Math.round((1 - az) * 1e5) + (this.net.boxes[h.key] ? 0 : 2e5)));
       // Kept far enough in from the sides that a whole tag stays readable.
       h.w ||= h.plank ? 0 : Math.max(h.el.offsetWidth, h.el.firstChild?.offsetWidth || 0) / 2 + 6;
       const clamp = (x) => (h.w ? Math.min(W - h.w, Math.max(h.w, x)) : x);
@@ -411,7 +415,7 @@ export class Title {
         // Near the foot of the screen the tag hangs above its button instead.
         const y = Math.min(H - 30, Math.max(30, ay));
         h.el.classList.toggle("up", y > H - 72);
-        st.transform = `translate(${clamp(ax)}px, ${y}px)`;
+        put(h, "transform", `translate(${clamp(ax)}px, ${y}px)`);
         continue;
       }
       const m = box.obj.matrixWorld;
@@ -423,12 +427,12 @@ export class Title {
       let turn = Math.atan2(y1 - y0, x1 - x0);
       if (turn > Math.PI / 2) turn -= Math.PI;
       if (turn < -Math.PI / 2) turn += Math.PI;
-      const w = Math.max(44, Math.hypot(x1 - x0, y1 - y0));
-      const t = Math.max(44, 2 * Math.hypot(ux - cx, uy - cy));
-      st.width = `${w}px`;
-      st.height = `${t}px`;
-      st.margin = `${-t / 2}px 0 0 ${-w / 2}px`;
-      st.transform = `translate(${clamp(cx)}px, ${cy}px) rotate(${turn}rad)`;
+      const w = Math.round(Math.max(44, Math.hypot(x1 - x0, y1 - y0)));
+      const t = Math.round(Math.max(44, 2 * Math.hypot(ux - cx, uy - cy)));
+      put(h, "width", `${w}px`);
+      put(h, "height", `${t}px`);
+      put(h, "margin", `${-t / 2}px 0 0 ${-w / 2}px`);
+      put(h, "transform", `translate(${clamp(cx)}px, ${cy}px) rotate(${turn}rad)`);
     }
   }
 
