@@ -76,7 +76,7 @@ body[data-screen="menu"] .brand, body[data-screen="menu"] #manualBtn, body[data-
 /* A short screen: the note takes the top left, where the scene leaves sky (the corner's banner
    fills the top middle), after Back when there is one. */
 @media (orientation: landscape) and (max-height: 499px) {
-  .slip { top: calc(var(--pad) + var(--top) + 6px); bottom: auto; left: var(--padL); right: auto; translate: none; max-width: min(300px, 34vw); text-align: left; }
+  .slip { top: calc(var(--pad) + var(--top) + 6px); bottom: auto; left: var(--padL); right: auto; translate: none; max-width: min(300px, calc(34vw - env(safe-area-inset-left, 0px))); text-align: left; }
   #backBtn:not([hidden]) ~ .slip { left: calc(var(--padL) + 124px); }
   .sheets { top: calc(var(--top) + 8px); max-height: calc(100% - var(--top) - 16px); }
   body[data-screen="menu"]:has(#menu .sheet:not([hidden])) .slip { display: none; }
