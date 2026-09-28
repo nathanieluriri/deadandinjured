@@ -7,10 +7,13 @@ export class Stage {
   constructor(canvas, { alpha = false } = {}) {
     const film = /[?&]film\b/.test(location.search);
     const dpr = window.devicePixelRatio || 1;
-    this.cap = film ? dpr : Math.min(dpr, coarse ? 2.5 : 2);
+    // Phones start a step lower and stop at 2: the icons on the bar draw at full sharpness on a
+    // canvas of their own (icons.js), so the field alone trades resolution for frame rate.
+    this.cap = film ? dpr : Math.min(dpr, 2);
     this.floor = Math.min(this.cap, coarse ? 1.25 : 1);
-    this.dpr = Math.min(this.cap, 2);
+    this.dpr = Math.min(this.cap, coarse ? 1.75 : 2);
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha, powerPreference: "high-performance", stencil: false });
+    if (coarse) this.renderer.debug.checkShaderErrors = false;
     this.alpha = alpha;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -97,6 +100,16 @@ export class Stage {
   }
 
   frame(deltaMs) {
+    if (coarse) {
+      // A phone draws at most about 60 times a second: on a 90 or 120 Hz screen, every other
+      // refresh. The shortest recent interval is the screen's own, even while frames run late.
+      if (deltaMs > 4) this.vsync = Math.min(deltaMs, (this.vsync || deltaMs) * 1.02);
+      this.stride = this.vsync < 12.5 ? 2 : 1;
+      this.owed = (this.owed || 0) + deltaMs;
+      if (this.stride === 2 && (this.skip = !this.skip)) return;
+      deltaMs = this.owed;
+      this.owed = 0;
+    }
     const real = Math.min(deltaMs / 1000, 0.1);
     const dt = Math.min(real, 0.05) * this.timeScale;
     this.time += dt;
@@ -130,11 +143,14 @@ export class Stage {
     f.length = 0;
     if (document.hidden) return;
     this.sinceUp++;
-    if (mid > 1 / 45 && this.dpr > this.floor) {
+    // A phone is measured against the pace it draws at, so skipping refreshes by design is not
+    // taken for running slow.
+    const pace = coarse && (this.stride * this.vsync) / 1000;
+    if (mid > (pace ? pace * 1.33 : 1 / 45) && this.dpr > this.floor) {
       this.dpr = Math.max(this.floor, this.dpr - 0.25);
       if (this.sinceUp < 4) this.patience = Math.min(this.patience * 2, 120);
       this.good = 0;
-    } else if (mid < 1 / 56 && this.dpr < this.cap) {
+    } else if (mid < (pace ? pace * 1.07 : 1 / 56) && this.dpr < this.cap) {
       if (++this.good >= this.patience) {
         this.good = 0;
         this.sinceUp = 0;

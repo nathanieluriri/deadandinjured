@@ -18,6 +18,7 @@ import { LEVELS } from "./ai.js";
 const $ = (id) => document.getElementById(id);
 const frame = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
 const fine = matchMedia("(pointer: fine)").matches;
+const coarse = matchMedia("(pointer: coarse)").matches;
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 async function api(path, body) {
@@ -105,7 +106,7 @@ class App {
     this.army = new Army(this.stage, await soldier);
     this.fx = new Fx(this.stage, this.world);
     this.sfx = new Sfx();
-    this.icons = new IconDeck(this.stage, { environment: this.world.envRT.texture, props: await props });
+    this.icons = new IconDeck(this.stage, { environment: this.world.envRT.texture, props: await props, envFor: (r) => this.world.envFor(r) });
     this.stage.restores.push(() => (this.icons.scene.environment = this.world.envRT.texture));
     this.gfx(store("di.gfx") || "auto");
     this.progress(0.6);
@@ -114,9 +115,9 @@ class App {
     this.director.onParadeEnd = () => this.parade(false);
     this.director.applyShot("corner", true);
     this.fx.warm();
-    this.stage.renderer.compile(this.stage.scene, this.stage.camera);
+    this.warm(this.stage.scene, this.stage.camera);
     for (const l of Object.values(this.hud.logos)) l.root.visible = true;
-    this.stage.renderer.compile(this.hud.scene, this.hud.camera);
+    this.warm(this.hud.scene, this.hud.camera);
     for (const l of Object.values(this.hud.logos)) l.root.visible = false;
     this.progress(0.85);
     await frame();
@@ -133,6 +134,7 @@ class App {
     this.me = me.player;
     this.googleOn = !!me.google;
     this.renderWho();
+    if (this.warming) await Promise.race([Promise.all(this.warming), new Promise((r) => setTimeout(r, 8000))]);
     this.progress(1);
     this.hud.onResize = () => this.placePre();
     this.placePre();
@@ -201,6 +203,13 @@ class App {
     if (name === "menu" && !reduced()) this.warTimer = setInterval(() => this.screen === "menu" && !document.hidden && this.director.distant(), 7000 + Math.random() * 6000);
   }
 
+  // Every shader is compiled while loading. A phone compiles them in parallel and the loading bar
+  // waits for all of them, so none is first built in the middle of a match.
+  warm(scene, camera) {
+    if (!coarse) return this.stage.renderer.compile(scene, camera);
+    (this.warming ||= []).push(this.stage.renderer.compileAsync(scene, camera));
+  }
+
   // Every tool on the bar, the pause stud and the draw's hands get their clay object.
   bindIcons() {
     const ic = this.icons;
@@ -216,7 +225,8 @@ class App {
     // The whole bar is compiled now, so the first match does not stall on it.
     ic.on = true;
     for (const it of ic.items.values()) it.root.visible = true;
-    this.stage.renderer.compile(ic.scene, ic.camera);
+    this.warm(ic.scene, ic.camera);
+    if (ic.bar) this.warming.push(ic.compileBar(), ic.warmFilm());
     for (const it of ic.items.values()) it.root.visible = false;
     ic.on = false;
   }
