@@ -53,6 +53,7 @@ body[data-screen="menu"] .brand, body[data-screen="menu"] #manualBtn, body[data-
 .sheet.roll .board tbody tr:nth-child(-n + 3) td:first-child { color: #b8391f; }
 .sheet.roll .board tr.me td { color: #b8391f; font-weight: 700; background: none; }
 #tagSheet .who { display: grid; gap: 6px; margin: 0; font: 400 14px/1.35 var(--typed); color: var(--ink-paper); }
+#tagSheet .who b { color: inherit; }
 #tagSheet .who .link { justify-self: start; min-height: 44px; font: 700 19px/44px var(--hand); color: var(--ink-blue); text-decoration: underline; }
 
 @media (max-width: 899px) {

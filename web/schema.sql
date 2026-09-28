@@ -11,10 +11,12 @@ CREATE TABLE IF NOT EXISTS players (
   best INTEGER,
   solo_wins INTEGER NOT NULL DEFAULT 0,
   solo_losses INTEGER NOT NULL DEFAULT 0,
-  solo_draws INTEGER NOT NULL DEFAULT 0
+  solo_draws INTEGER NOT NULL DEFAULT 0,
+  google TEXT
 );
 
 CREATE INDEX IF NOT EXISTS players_rank ON players (wins DESC, losses ASC);
+CREATE UNIQUE INDEX IF NOT EXISTS players_google ON players (google);
 
 CREATE TABLE IF NOT EXISTS sessions (
   token_hash TEXT PRIMARY KEY,
