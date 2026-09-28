@@ -35,6 +35,8 @@
   --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --top: env(safe-area-inset-top, 0px);
   --bottom: env(safe-area-inset-bottom, 0px);
+  --padL: calc(var(--pad) + env(safe-area-inset-left, 0px));
+  --padR: calc(var(--pad) + env(safe-area-inset-right, 0px));
   color-scheme: dark;
 }
 html.film { --top: 62px; --bottom: 34px; }
@@ -115,7 +117,7 @@ svg { flex: none; }
 .card .row .btn { flex: 1 1 auto; }
 
 /* ---- top bar ------------------------------------------------------------------------------ */
-.top { position: fixed; top: 0; left: 0; right: 0; z-index: 8; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: calc(var(--pad) + var(--top)) var(--pad) 0; pointer-events: none; }
+.top { position: fixed; top: 0; left: 0; right: 0; z-index: 8; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: calc(var(--pad) + var(--top)) var(--padR) 0 var(--padL); pointer-events: none; }
 .top > * { pointer-events: auto; }
 .brand { display: inline-flex; border-radius: var(--r-sm); }
 .brand img { width: 26px; height: 26px; border-radius: 7px; box-shadow: 0 0 0 1px var(--line-2); }

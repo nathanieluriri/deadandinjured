@@ -685,6 +685,7 @@ export class MatchView {
     this.stamped = true;
     vd.querySelector("b").textContent = text;
     vd.querySelector("span").textContent = verdictLine(text, winner, reason);
+    vd.classList.toggle("won", winner === "me");
     vd.classList.add("on");
     const ink = vd.firstElementChild;
     if (instant) return play(ink, [{ opacity: 1 }, { opacity: 1 }], { duration: 1 });

@@ -77,7 +77,7 @@
         <p class="sheet-head" id="searchText" role="status">Scanning the airwaves</p>
         <div id="quickForm"></div>
       </section>
-      <section class="sheet roll" id="rollSheet" hidden aria-label="Roll of honour">
+      <section class="sheet roll" id="rollSheet" hidden aria-label="Roll of honour" tabindex="0">
         <p class="sheet-head">Roll of honour</p>
         <table class="board"><thead><tr><th>#</th><th>Callsign</th><th>W</th><th>L</th><th title="Soldiers killed">KIA</th></tr></thead><tbody id="boardBody"></tbody></table>
       </section>
@@ -304,14 +304,14 @@
 <div class="toast" id="toast" role="status"></div>
 <p class="vh" aria-live="polite" id="live"></p>
 
-<div class="pre" id="pre">
+<section class="pre" id="pre" aria-label="The way in">
   <div class="pre-in">
     <p class="pre-title"><span>Dead &amp;</span><span>Injured</span></p>
     <div class="pre-bar"><i id="preBar"></i></div>
     <button type="button" class="btn lg enter" id="enterBtn" disabled>Loading the field</button>
     <p class="pre-note">Best with sound on</p>
   </div>
-</div>
+</section>
 <script type="module" src="%APP%"></script>
 </body>
 </html>

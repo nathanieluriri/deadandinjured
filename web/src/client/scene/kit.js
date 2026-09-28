@@ -23,7 +23,14 @@ export function tint(geo, hex) {
 }
 
 export const join = (parts) => mergeGeometries(parts.map(([g, hex]) => tint(g, hex)));
-export const box = (w, h, d, r = 0.02) => new RoundedBoxGeometry(w, h, d, 2, Math.min(r, w / 2 - 0.001, h / 2 - 0.001, d / 2 - 0.001));
+// A rounded box is slow to build and the same few sizes recur, so each size is built once and copied.
+const boxes = new Map();
+export const box = (w, h, d, r = 0.02) => {
+  const key = `${w} ${h} ${d} ${r}`;
+  let g = boxes.get(key);
+  if (!g) boxes.set(key, (g = new RoundedBoxGeometry(w, h, d, 2, Math.min(r, w / 2 - 0.001, h / 2 - 0.001, d / 2 - 0.001))));
+  return g.clone();
+};
 export const cyl = (a, b, h, n = 16) => new THREE.CylinderGeometry(a, b, h, n);
 const PI = Math.PI;
 
@@ -50,7 +57,11 @@ function handset() {
   return parts;
 }
 
-export function fieldPhone() {
+// Built once: the end of a match and the signals dugout both have one.
+let phoneGeo = null;
+export const fieldPhone = () => (phoneGeo ||= phoneMade()).clone();
+
+function phoneMade() {
   const W = 0.86;
   const H = 0.46;
   const fz = 0.25;

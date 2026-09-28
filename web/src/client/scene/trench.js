@@ -4,7 +4,8 @@ import { K, tint, join, box, cyl } from "./kit.js";
 
 // The pieces a breastwork trench is built from, in the soldiers' clay style: sandbags, timber
 // and corrugated iron revetments, duckboards, doorways, lanterns. Each returns one geometry with
-// vertex colours so a whole stretch of trench merges into a few meshes.
+// vertex colours so a whole stretch of trench merges into a few meshes; the sandbags, by far the
+// most numerous, are placings for one instanced mesh.
 const PI = Math.PI;
 const T = {
   sack: 0x75664a, sackDark: 0x5f5139, sackLight: 0x8a7a58,
@@ -18,12 +19,22 @@ export function seeded(seed = 1) {
   return () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
 }
 
+// Every piece below is fixed by its measurements and a trench repeats the same few, so each
+// shape is built once and copied after that.
+const made = new Map();
+const once = (name, build) => (...args) => {
+  const key = `${name} ${args.join(" ")}`;
+  let g = made.get(key);
+  if (!g) made.set(key, (g = build(...args)));
+  return g.clone();
+};
+
 // A trench is built from hundreds of these, so they stay plain boxes: a few triangles each.
 export const slab = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 
 // One sandbag: a stuffed pillow, squared at the ends and bulging in the middle, in twenty
 // triangles with its normals shared across the edges so it shades soft.
-const sackGeo = (() => {
+export const sackGeo = (() => {
   const g = mergeVertices(new THREE.BoxGeometry(0.56, 0.2, 0.34, 2, 1, 1).deleteAttribute("normal").deleteAttribute("uv"));
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
@@ -35,9 +46,10 @@ const sackGeo = (() => {
   return g;
 })();
 
-// Courses of sandbags laid in stretcher bond along x, `len` long and `rows` high.
-export function sandbagWall(len, rows = 3, rnd = seeded(len * 97 + rows)) {
-  const parts = [];
+// Courses of sandbags laid in stretcher bond along x, `len` long and `rows` high: each sack's
+// placing (as a matrix) and its shade. The network draws them all as one instanced mesh.
+export function sandbags(len, rows = 3, rnd = seeded(len * 97 + rows)) {
+  const out = [];
   const bagW = 0.6;
   for (let r = 0; r < rows; r++) {
     const off = r % 2 ? bagW / 2 : 0;
@@ -46,18 +58,19 @@ export function sandbagWall(len, rows = 3, rnd = seeded(len * 97 + rows)) {
       const x = -len / 2 + off + bagW / 2 + i * bagW;
       if (x > len / 2) continue;
       const shade = [T.sack, T.sackDark, T.sackLight][Math.floor(rnd() * 3)];
-      const g = sackGeo.clone();
-      g.rotateY((rnd() - 0.5) * 0.12).rotateZ((rnd() - 0.5) * 0.08);
-      g.scale(0.95 + rnd() * 0.1, 1, 1);
-      g.translate(x + (rnd() - 0.5) * 0.04, 0.1 + r * 0.19, (rnd() - 0.5) * 0.05);
-      parts.push([g, shade]);
+      const turn = (rnd() - 0.5) * 0.12;
+      const tilt = (rnd() - 0.5) * 0.08;
+      const stretch = 0.95 + rnd() * 0.1;
+      const m = new THREE.Matrix4().makeTranslation(x + (rnd() - 0.5) * 0.04, 0.1 + r * 0.19, (rnd() - 0.5) * 0.05);
+      m.multiply(new THREE.Matrix4().makeScale(stretch, 1, 1)).multiply(new THREE.Matrix4().makeRotationZ(tilt)).multiply(new THREE.Matrix4().makeRotationY(turn));
+      out.push([m, shade]);
     }
   }
-  return join(parts);
+  return out;
 }
 
 // Timber revetment: posts driven in every metre and planks laid behind them.
-export function plankWall(len, h = 1.3) {
+export const plankWall = once("plankWall", (len, h = 1.3) => {
   const parts = [];
   const posts = Math.max(2, Math.round(len) + 1);
   for (let i = 0; i < posts; i++) {
@@ -70,10 +83,10 @@ export function plankWall(len, h = 1.3) {
     parts.push([slab(len, 0.2, 0.05).rotateZ((r % 2 ? 1 : -1) * 0.006).translate(0, 0.11 + r * 0.22, 0), c]);
   }
   return join(parts);
-}
+});
 
 // A sheet of corrugated iron standing as a revetment or lying as a roof.
-export function ironSheet(w = 1.8, h = 1.1, rust = 0.5) {
+export const ironSheet = once("ironSheet", (w = 1.8, h = 1.1, rust = 0.5) => {
   const seg = 24;
   const g = new THREE.PlaneGeometry(w, h, seg, 1);
   const p = g.attributes.position;
@@ -90,10 +103,10 @@ export function ironSheet(w = 1.8, h = 1.1, rust = 0.5) {
   g.setAttribute("color", new THREE.BufferAttribute(col, 3));
   const back = g.clone().rotateY(PI);
   return join([[g, 0], [back, 0]]);
-}
+});
 
 // A duckboard: two runners and slats across, to keep boots out of the mud.
-export function duckboard(len = 2, w = 0.7) {
+export const duckboard = once("duckboard", (len = 2, w = 0.7) => {
   const parts = [];
   for (const s of [-1, 1]) parts.push([slab(len, 0.08, 0.08).translate(0, 0.04, s * (w / 2 - 0.08)), T.post]);
   const n = Math.round(len / 0.16);
@@ -102,11 +115,11 @@ export function duckboard(len = 2, w = 0.7) {
     parts.push([slab(0.1, 0.03, w).translate(x, 0.095, 0), i % 4 === 2 ? T.plankLight : T.board]);
   }
   return join(parts);
-}
+});
 
 // A dugout's entrance: a timber frame with a lintel, and the gas curtain hung across it,
 // drawn aside.
-export function doorway(w = 1.1, h = 1.7) {
+export const doorway = once("doorway", (w = 1.1, h = 1.7) => {
   const parts = [
     [slab(0.16, h, 0.16).translate(-w / 2, h / 2, 0), T.post],
     [slab(0.16, h, 0.16).translate(w / 2, h / 2, 0), T.post],
@@ -118,11 +131,16 @@ export function doorway(w = 1.1, h = 1.7) {
   }
   parts.push([cyl(0.02, 0.02, w + 0.1, 6).rotateZ(PI / 2).translate(0, h - 0.05, 0.08), K.metal]);
   return join(parts);
-}
+});
 
 // A trench lantern: a brass frame round a glass chimney. The glass is a separate geometry so it
 // can glow.
+let lamp = null;
 export function lantern() {
+  lamp ||= lanternMade();
+  return { frame: lamp.frame.clone(), glass: lamp.glass.clone() };
+}
+function lanternMade() {
   const frame = join([
     [cyl(0.09, 0.1, 0.03, 12).translate(0, 0, 0), K.brassDark],
     [cyl(0.07, 0.09, 0.06, 12).translate(0, 0.3, 0), K.brassDark],
@@ -144,12 +162,12 @@ export function brazier() {
 }
 
 // An A-frame: the timber that holds a trench's walls apart and carries its duckboards.
-export function aFrame(w = 1.4, h = 1.5) {
+export const aFrame = once("aFrame", (w = 1.4, h = 1.5) => {
   return join([
     [slab(0.1, h * 1.05, 0.1).rotateZ(0.2).translate(-w / 2 + 0.1, h / 2, 0), T.post],
     [slab(0.1, h * 1.05, 0.1).rotateZ(-0.2).translate(w / 2 - 0.1, h / 2, 0), T.post],
     [slab(w, 0.1, 0.1).translate(0, h * 0.28, 0), T.post],
   ]);
-}
+});
 
 export const TRENCH_COLOURS = T;

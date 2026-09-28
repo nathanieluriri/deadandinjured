@@ -40,7 +40,7 @@ npx wrangler d1 execute dead-and-injured --local --file schema.sql
 npm run dev
 ```
 
-`npm test` runs the rules, engine, computer and telegram tests. With `wrangler dev` running, `node test/api.mjs` checks the rooms, the lobby and the API without a browser, `node test/e2e.mjs` plays a full live match between two browsers, through the stamp and telegram to a rematch, and `node test/quick.mjs` checks quick match and signing in (the browser tests need `NODE_PATH=$(npm root -g)` for Playwright). `node test/api.mjs --clock` checks that a room ends itself when the match clock runs out; run it against `wrangler dev --var TIME_SCALE:0.05`, where five minutes pass in fifteen seconds.
+`npm test` runs the rules, engine, computer and telegram tests. With `wrangler dev` running, `node test/api.mjs` checks the rooms, the lobby and the API without a browser, `node test/e2e.mjs` plays a full live match between two browsers, through the stamp and telegram to a rematch, `node test/quick.mjs` checks quick match and signing in, and `node test/title.mjs` checks the title in the trench: that every point along a plank or a nameplate presses that object's own button (on an upright phone, a phone on its side and a desktop), hosting a room (the telephone again, typing in the dial, Esc, Back, your own room's link, leaving while a room opens or a code is checked), and coming back into a match already under way as its host and as its guest (the browser tests need `NODE_PATH=$(npm root -g)` for Playwright). `node test/api.mjs --clock` checks that a room ends itself when the match clock runs out; run it against `wrangler dev --var TIME_SCALE:0.05`, where five minutes pass in fifteen seconds.
 
 ## Models
 

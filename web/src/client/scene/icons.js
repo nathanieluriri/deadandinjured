@@ -37,7 +37,14 @@ function gun() {
   return join([...parts, ...barrel]);
 }
 
-export function scope() {
+// The scope and the canister are wanted by the bar's icons and the war room's map alike, so
+// each is built once and copied.
+let scopeGeo = null;
+let smokeGeo = null;
+export const scope = () => (scopeGeo ||= scopeMade()).clone();
+export const smoke = () => (smokeGeo ||= smokeMade()).clone();
+
+function scopeMade() {
   return join([
     [cyl(0.1, 0.1, 1.1, 18).rotateZ(PI / 2), K.metal],
     [cyl(0.11, 0.18, 0.3, 20).rotateZ(PI / 2).translate(0.66, 0, 0), K.metal],
@@ -52,7 +59,7 @@ export function scope() {
   ]);
 }
 
-export function smoke() {
+function smokeMade() {
   const parts = [
     [cyl(0.2, 0.2, 0.56, 20).translate(0, 0.28, 0), K.olive],
     [cyl(0.206, 0.206, 0.09, 20).translate(0, 0.38, 0), K.cream],

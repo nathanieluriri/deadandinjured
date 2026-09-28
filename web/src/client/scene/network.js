@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { K, tint, join, box, cyl } from "./kit.js";
-import { sandbagWall, plankWall, ironSheet, duckboard, doorway, lantern, aFrame, seeded, slab, TRENCH_COLOURS as T } from "./trench.js";
+import { sandbags, sackGeo, plankWall, ironSheet, duckboard, doorway, lantern, aFrame, seeded, slab, TRENCH_COLOURS as T } from "./trench.js";
 import { fieldPhone } from "./kit.js";
 import { scope, smoke } from "./icons.js";
 import { buildPlane } from "./plane.js";
@@ -103,6 +103,7 @@ export class Network {
     this.parts = [];
     this.glass = [];
     this.touch = {};
+    this.sacks = [];
     this.anchors = {};
     // The objects whose buttons take their shape each frame: a mesh and its long axis, local.
     this.boxes = {};
@@ -110,9 +111,16 @@ export class Network {
     this.time = 0;
   }
 
-  // Adds a piece of static geometry, placed and turned, to the merged mesh.
+  // A wall of sandbags, placed and turned: each sack becomes an instance of one mesh.
+  bags(len, rows, x, y, z, yaw = 0) {
+    const place = new THREE.Matrix4().makeRotationY(yaw).setPosition(x, y, z);
+    for (const [m, shade] of sandbags(len, rows)) this.sacks.push([place.clone().multiply(m), shade]);
+  }
+
+  // Adds a piece of static geometry, placed and turned, to the merged mesh. The geometry is taken,
+  // not copied, so each call needs its own.
   put(geo, x, y, z, yaw = 0, list = this.parts) {
-    const g = geo.attributes.color ? geo.clone() : tint(geo.clone(), T.post);
+    const g = geo.attributes.color ? geo : tint(geo, T.post);
     g.rotateY(yaw);
     g.translate(x, y, z);
     list.push(g);
@@ -139,28 +147,34 @@ export class Network {
     }
     for (const g of this.parts) g.dispose();
     this.parts = [];
+    const sacks = new THREE.InstancedMesh(sackGeo, new THREE.MeshLambertMaterial(), this.sacks.length);
+    const shade = new THREE.Color();
+    this.sacks.forEach(([m, hex], i) => {
+      sacks.setMatrixAt(i, m);
+      sacks.setColorAt(i, shade.setHex(hex));
+    });
+    sacks.computeBoundingSphere();
+    this.group.add(sacks);
+    this.sacks = [];
   }
 
   // The trench corner: a bay where the trench turns back from the line, with a sandbag
   // parapet toward the enemy, a firestep, timber walls and duckboards.
   corner() {
     const { x, z } = PLACES.corner;
-    this.put(sandbagWall(4.8, 6), x - 0.1, 0, z - 2.25);
-    this.put(sandbagWall(4.8, 2), x - 0.1, 1.14, z - 2.35);
+    this.bags(4.8, 6, x - 0.1, 0, z - 2.25);
+    this.bags(4.8, 2, x - 0.1, 1.14, z - 2.35);
     this.put(tint(slab(4.4, 0.08, 0.42), T.board), x - 0.1, 0.42, z - 1.8, 0);
     for (const dx of [-2, -0.7, 0.6, 1.9]) this.put(box(0.1, 0.42, 0.1, 0.02), x + dx, 0.21, z - 1.7);
     this.put(plankWall(5.2, 1.3), x - 2.45, 0, z + 0.35, PI / 2);
-    this.put(sandbagWall(5.2, 2), x - 2.6, 1.3, z + 0.35, PI / 2);
+    this.bags(5.2, 2, x - 2.6, 1.3, z + 0.35, PI / 2);
     // The right side closes with a traverse, a thick block of sandbags the trench turns round.
-    this.put(sandbagWall(2.2, 7), x + 2.35, 0, z - 1.1, PI / 2);
-    this.put(sandbagWall(2.2, 7), x + 2.75, 0, z - 1.1, PI / 2);
+    this.bags(2.2, 7, x + 2.35, 0, z - 1.1, PI / 2);
+    this.bags(2.2, 7, x + 2.75, 0, z - 1.1, PI / 2);
     for (let i = 0; i < 3; i++) this.put(duckboard(1.6, 0.7), x - 1.2 + i * 1.3, 0, z - 0.6, PI / 2);
     this.put(duckboard(2, 0.7), x + 1.2, 0, z + 0.9);
-    const l = lantern();
-    this.put(l.frame, x + 1.95, 2.25, z - 2.05);
-    this.put(l.glass, x + 1.95, 2.25, z - 2.05, 0, this.glass);
-    this.put(l.frame, x - 2.25, 1.45, z + 1.6);
-    this.put(l.glass, x - 2.25, 1.45, z + 1.6, 0, this.glass);
+    this.lamp(x + 1.95, 2.25, z - 2.05);
+    this.lamp(x - 2.25, 1.45, z + 1.6);
     // The field manual on a crate, and the field radio on the firestep.
     this.anchors.manual = new THREE.Vector3(x - 1.7, 0.66, z + 1.3);
     this.anchors.sound = new THREE.Vector3(x + 1.2, 0.85, z - 1.8);
@@ -197,7 +211,11 @@ export class Network {
       this.put(box(0.3, 0.08, 0.08, 0.02), px, 3.7, bz);
     }
     const w = right - left - 0.3;
-    const tex = paint(2048, 560, (c, W, H) => {
+    // Painted at half size: the banner is never more than about 700 pixels wide on screen.
+    const tex = paint(1024, 280, (c) => {
+      const W = 2048;
+      const H = 560;
+      c.scale(0.5, 0.5);
       weave(c, W, H, "#d9ceb2");
       c.strokeStyle = "rgba(60, 45, 25, 0.35)";
       c.lineWidth = 10;
@@ -256,8 +274,8 @@ export class Network {
       [box(0.09, 0.14, 0.01, 0.02), 0xb8b3a6],
       [cyl(0.004, 0.004, 0.22, 4).rotateZ(0.6).translate(-0.03, 0.12, 0), 0x8a857c],
     ]);
-    this.put(tag, sx + 0.08, 1.05, sz + 0.075);
-    this.anchors.tag = new THREE.Vector3(sx + 0.08, 1.05, sz + 0.08);
+    this.put(tag, sx + 0.08, 0.82, sz + 0.075);
+    this.anchors.tag = new THREE.Vector3(sx + 0.08, 0.82, sz + 0.08);
     this.signs = SIGNS.map((s, i) => {
       const shape = new THREE.Shape();
       const L = 1.55;
@@ -323,10 +341,10 @@ export class Network {
     const len = z1 - z0;
     const mid = (z0 + z1) / 2;
     // The left wall breaks at z 13.4 to 14.8 for the branch to the signals dugout.
-    this.put(sandbagWall(3, 6), cx - 0.85, 0, z0 + 1.5, PI / 2);
-    this.put(sandbagWall(1.6, 6), cx - 0.85, 0, z1 - 0.8, PI / 2);
+    this.bags(3, 6, cx - 0.85, 0, z0 + 1.5, PI / 2);
+    this.bags(1.6, 6, cx - 0.85, 0, z1 - 0.8, PI / 2);
     this.put(plankWall(len, 1.2), cx + 0.8, 0, mid, -PI / 2);
-    this.put(sandbagWall(len, 2), cx + 0.95, 1.2, mid, PI / 2);
+    this.bags(len, 2, cx + 0.95, 1.2, mid, PI / 2);
     for (let i = 0; i < 3; i++) this.put(duckboard(2, 0.7), cx, 0, z0 + 1 + i * 2, PI / 2);
     this.put(aFrame(1.5, 1.35), cx, 0, z0 + 2.2);
     this.put(aFrame(1.5, 1.35), cx, 0, z0 + 4.8);
@@ -348,8 +366,8 @@ export class Network {
     const wall = (len, x, z, yaw, bank = true) => {
       this.put(plankWall(len, h), x, 0, z, yaw);
       if (!bank) return;
-      this.put(sandbagWall(len + 0.5, 6), x - Math.sin(yaw) * 0.32, 0, z - Math.cos(yaw) * 0.32, yaw);
-      this.put(sandbagWall(len + 0.9, 3), x - Math.sin(yaw) * 0.66, 0, z - Math.cos(yaw) * 0.66, yaw);
+      this.bags(len + 0.5, 6, x - Math.sin(yaw) * 0.32, 0, z - Math.cos(yaw) * 0.32, yaw);
+      this.bags(len + 0.9, 3, x - Math.sin(yaw) * 0.66, 0, z - Math.cos(yaw) * 0.66, yaw);
     };
     const withDoor = (len, x, z, yaw, at) => {
       const gap = 1.3;
@@ -376,8 +394,8 @@ export class Network {
       sheet.rotateX(-PI / 2).rotateY(0.03 * (i % 2 ? 1 : -1));
       this.put(sheet, cx - hw + 0.8 + i * 1.6, h + 0.14, cz);
     }
-    this.put(sandbagWall(w * 0.8, 2), cx, h + 0.16, cz - hd + 0.3);
-    this.put(sandbagWall(w * 0.6, 1), cx + 0.3, h + 0.16, cz + 0.4);
+    this.bags(w * 0.8, 2, cx, h + 0.16, cz - hd + 0.3);
+    this.bags(w * 0.6, 1, cx + 0.3, h + 0.16, cz + 0.4);
   }
 
   // The war room: a dugout at the end of the communication trench with the map table, the
@@ -475,8 +493,8 @@ export class Network {
   signals() {
     const { x, z } = PLACES.signals;
     // The branch from the communication trench.
-    this.put(sandbagWall(2.6, 6), -15.3, 0, 13.3);
-    this.put(sandbagWall(2.6, 6), -15.3, 0, 14.9, PI);
+    this.bags(2.6, 6, -15.3, 0, 13.3);
+    this.bags(2.6, 6, -15.3, 0, 14.9, PI);
     this.put(duckboard(2.4, 0.7), -15.4, 0, 14.1);
     this.dugout(x, z, 3.6, 4, { door: "right", doorAt: -1.5 });
     // The telephone on a shelf under the chalkboard, both on the back wall facing the door.
@@ -505,12 +523,12 @@ export class Network {
   radioPost() {
     const { x, z } = PLACES.radio;
     // The trench from the war room's side to the post.
-    this.put(sandbagWall(3.2, 6), -10.4, 0, 21.6, PI / 2);
-    this.put(sandbagWall(3.2, 6), -8.8, 0, 21.2, PI / 2);
+    this.bags(3.2, 6, -10.4, 0, 21.6, PI / 2);
+    this.bags(3.2, 6, -8.8, 0, 21.2, PI / 2);
     this.put(duckboard(2.6, 0.7), -9.6, 0, 21.4, PI / 2);
-    this.put(sandbagWall(3.4, 6), x - 1.6, 0, z + 0.2, PI / 2);
-    this.put(sandbagWall(3.2, 6), x, 0, z + 1.8);
-    this.put(sandbagWall(2.2, 6), x + 1.6, 0, z + 0.6, PI / 2);
+    this.bags(3.4, 6, x - 1.6, 0, z + 0.2, PI / 2);
+    this.bags(3.2, 6, x, 0, z + 1.8);
+    this.bags(2.2, 6, x + 1.6, 0, z + 0.6, PI / 2);
     for (const [dx, dz] of [[-1.3, -1.1], [1.3, -1.1], [-1.3, 1.4], [1.3, 1.4]]) this.put(tint(slab(0.12, 2.3, 0.12), T.post), x + dx, 1.15, z + dz);
     const roof = ironSheet(3, 2.9, 0.7);
     roof.rotateX(-PI / 2 + 0.08);
@@ -550,7 +568,10 @@ export class Network {
   // title shows them.
   plates() {
     const names = ["Recruit", "Sergeant", "General"];
-    const tex = paint(1024, 384, (c, W, H) => {
+    const tex = paint(512, 192, (c) => {
+      const W = 1024;
+      const H = 384;
+      c.scale(0.5, 0.5);
       names.forEach((n, i) => {
         const y = (i * H) / 3;
         c.fillStyle = ["#8a6440", "#7a5431", "#946b43"][i];

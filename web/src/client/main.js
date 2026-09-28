@@ -90,7 +90,9 @@ class App {
     this.world = new World(this.stage);
     this.world.dress(await props);
     this.network = new Network(this.world.scene);
+    const built = performance.now();
     await this.network.build();
+    performance.measure("trench", { start: built });
     this.network.orders(this.orders);
     this.stage.hooks.push((dt) => this.network.update(dt));
     this.progress(0.4);
@@ -386,7 +388,7 @@ class App {
         // anywhere else the sheet stands to the right and the place moves left of it.
         const sheet = [...document.querySelectorAll("#menu .sheet")].find((x) => !x.hidden);
         if (sheet && innerWidth < 900 && !matchMedia("(orientation: landscape)").matches) bottom = innerHeight - sheet.getBoundingClientRect().top;
-        else if (sheet) side = (innerWidth - sheet.getBoundingClientRect().left) * 0.8;
+        else if (sheet && sheet.id !== "tagSheet") side = (innerWidth - sheet.getBoundingClientRect().left) * 0.8;
       }
       this.stage.setInset(Math.round(top), Math.round(bottom), this.screen === "match" || this.screen === "menu", Math.round(side));
     });

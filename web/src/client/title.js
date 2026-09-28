@@ -384,6 +384,9 @@ export class Title {
   pin() {
     if (!this.hotEls.length) return;
     const cam = this.app.stage.camera;
+    // The camera has moved this frame but not yet rendered, so its matrices are brought up to date
+    // here: the buttons then sit exactly under their objects, even mid-journey.
+    cam.updateMatrixWorld();
     const W = innerWidth;
     const H = innerHeight;
     const v = this.v;
@@ -398,7 +401,8 @@ export class Title {
       const off = az > 1 || ax < -0.05 * W || ax > 1.05 * W || ay < -0.05 * H || ay > 1.05 * H;
       const st = h.el.style;
       st.visibility = off ? "hidden" : "";
-      st.zIndex = String(Math.round((1 - az) * 1e5));
+      // Small objects (the dog tag on the signpost) stay above the planks' long buttons.
+      st.zIndex = String(Math.round((1 - az) * 1e5) + (this.net.boxes[h.key] ? 0 : 2e5));
       // Kept far enough in from the sides that a whole tag stays readable.
       h.w ||= h.plank ? 0 : Math.max(h.el.offsetWidth, h.el.firstChild?.offsetWidth || 0) / 2 + 6;
       const clamp = (x) => (h.w ? Math.min(W - h.w, Math.max(h.w, x)) : x);
@@ -420,7 +424,7 @@ export class Title {
       if (turn > Math.PI / 2) turn -= Math.PI;
       if (turn < -Math.PI / 2) turn += Math.PI;
       const w = Math.max(44, Math.hypot(x1 - x0, y1 - y0));
-      const t = Math.max(h.plank ? 24 : 44, 2 * Math.hypot(ux - cx, uy - cy));
+      const t = Math.max(44, 2 * Math.hypot(ux - cx, uy - cy));
       st.width = `${w}px`;
       st.height = `${t}px`;
       st.margin = `${-t / 2}px 0 0 ${-w / 2}px`;
