@@ -1,5 +1,5 @@
-// The title in the trench: the buttons over the planks and nameplates, hosting a room, and coming
-// back into a match already under way.
+// The title in the trench: the buttons over the planks and nameplates, hosting a room, coming
+// back into a match already under way, and the tutorials.
 //   npx wrangler dev   (in another shell)
 //   NODE_PATH=$(npm root -g) node test/title.mjs [http://127.0.0.1:8787]
 import { createRequire } from "node:module";
@@ -233,6 +233,56 @@ for (const [w, h] of [[390, 844], [844, 390], [1440, 900]]) {
   await at(B, "corner");
   s = await title(B);
   check(s.screen === "menu" && s.place === "corner" && s.paraded, "Back to base walks to the corner, the commanders back on parade", s);
+}
+
+// 4. Tutorials: over the top into a drill the enemy never fires back in, a lesson for each step,
+// nothing recorded, and training again from the telephone.
+{
+  const p = await page(1280, 800, { name: `Drill${stamp}` });
+  await enter(p);
+  await at(p, "corner");
+  const before = await p.evaluate(async () => (await (await fetch("/api/me")).json()).player);
+  await hot(p, "Tutorials");
+  // Settled once the n-th move has played out and its state has arrived.
+  const ready = (n = 0) => p.waitForFunction((k) => {
+    const v = window.__app.view;
+    return v.s?.phase === "battle" && v.s.volleys.length + v.s.powers.length === k && !v.animating && !document.getElementById("drill").hidden;
+  }, n, { timeout: 180000, polling: 250 });
+  const step = () => p.evaluate(() => document.getElementById("drillStep").textContent);
+  await ready();
+  let s = await title(p);
+  check(s.screen === "match" && !s.place && !s.paraded && (await step()).startsWith("Lesson 1 of 6"), "Tutorials climbs over the top into the drill", s);
+  const secret = await p.evaluate(() => window.__app.view.conn.g.p[1].secret);
+  const act = (m) => p.evaluate((x) => window.__app.view.conn.send(x), m);
+  const other = [..."0123456789"].filter((d) => !secret.includes(d));
+  const lessons = [];
+  for (const m of [
+    { t: "fire", guess: other.slice(0, 4).join("") },
+    { t: "fire", guess: secret[1] + secret[0] + other[0] + other[1] },
+    { t: "power", kind: "recon", digit: secret[2] },
+    { t: "fire", guess: other.slice(2, 6).join("") },
+    { t: "power", kind: "sniper", digit: secret[0], pos: 0 },
+    { t: "fire", guess: other.slice(1, 5).join("") },
+    { t: "power", kind: "smoke" },
+  ]) {
+    await act(m);
+    await ready(lessons.length + 1);
+    await sleep(300);
+    lessons.push(await step());
+  }
+  check(lessons.map((l) => l.split(":")[0]).join() === "Lesson 2 of 6,Lesson 3 of 6,Lesson 4 of 6,Lesson 4 of 6,Lesson 5 of 6,Lesson 5 of 6,Lesson 6 of 6", "a lesson follows each step", lessons);
+  const opp = await p.evaluate(() => window.__app.view.s.volleys.filter((v) => v.by === "opp").length);
+  check(opp === 0, "the drill squad never fires", opp);
+  await act({ t: "fire", guess: secret });
+  await p.waitForFunction(() => document.body.classList.contains("told"), null, { timeout: 180000, polling: 250 });
+  const end = await p.evaluate(() => ({ label: document.getElementById("rematchLabel").textContent, slip: !document.getElementById("drill").hidden }));
+  check(end.label === "Train again" && !end.slip, "the drill ends with the telegram and Train again", end);
+  const after = await p.evaluate(async () => (await (await fetch("/api/me")).json()).player);
+  check(JSON.stringify(after) === JSON.stringify(before), "training records nothing", { before, after });
+  await click(p, "rematchBtn");
+  await ready();
+  check((await step()).startsWith("Lesson 1 of 6") && (await p.evaluate(() => window.__app.view.s.volleys.length)) === 0, "Train again starts a fresh drill");
+  await p.context().close();
 }
 
 await browser.close();

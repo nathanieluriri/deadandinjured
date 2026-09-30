@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { isCode, score, rps, randomCode, allCodes, roomCode, ROOM_RE, cleanOrders, packOrders, parseOrders, randomOrders, STANDARD_ORDERS } from "../src/shared/rules.js";
-import { newGame, join, act, tick, view, TIMES, turnMs, nextWake, shiftClocks, closest } from "../src/shared/game.js";
+import { newGame, newDrill, join, act, tick, view, TIMES, turnMs, nextWake, shiftClocks, closest } from "../src/shared/game.js";
 import { Commander } from "../src/client/ai.js";
 
 const seeded = (seed) => () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
@@ -519,4 +519,33 @@ test("the computer only uses supplies that are on", () => {
   }
   assert.equal(ai.choosePower(3, 3, 4, { recon: true, sniper: true, smoke: false })?.kind === "smoke", false);
   assert.equal(ai.choosePower(3, 0, 2, { recon: false, sniper: false, smoke: false }), null);
+});
+
+test("a drill: the enemy never fires, every turn is yours, one crate for each supply", () => {
+  const g = newDrill({ name: "Alpha", now: 0, secret: "4071", mine: "5689" });
+  let s = view(g, 0, 0);
+  assert.equal(s.phase, "battle");
+  assert.equal(s.turn, "me");
+  assert.equal(s.me.supplies, 3);
+  assert.equal(s.clock, null);
+  assert.equal(nextWake(g), null);
+  let r = act(g, 0, { t: "fire", guess: "1024" }, 1);
+  assert.deepEqual(r.events.find(([seat]) => seat === 0)[1], { t: "volley", by: "me", guess: "1024", dead: 1, injured: 2, smoked: false, round: 1 });
+  assert.equal(view(g, 0, 1).turn, "me");
+  assert.deepEqual(act(g, 1, { t: "fire", guess: "1234" }, 1), { error: "Not your turn", events: [] });
+  r = act(g, 0, { t: "power", kind: "recon", digit: "7" }, 2);
+  assert.equal(r.events[0][1].result, true);
+  assert.equal(act(g, 0, { t: "power", kind: "sniper", digit: "4", pos: 0 }, 2).error, "One supply per turn");
+  act(g, 0, { t: "fire", guess: "4012" }, 3);
+  assert.equal(act(g, 0, { t: "power", kind: "sniper", digit: "4", pos: 0 }, 4).events[0][1].result, true);
+  act(g, 0, { t: "fire", guess: "4013" }, 5);
+  assert.equal(act(g, 0, { t: "power", kind: "smoke" }, 6).error, undefined);
+  assert.equal(view(g, 0, 6).me.supplies, 0);
+  assert.deepEqual(tick(g, 1e9), []);
+  r = act(g, 0, { t: "fire", guess: "4071" }, 7);
+  const over = r.events.find(([seat, e]) => seat === 0 && e.t === "over")[1];
+  assert.equal(over.winner, "me");
+  assert.equal(over.reason, "cracked");
+  assert.ok(!r.events.some(([, e]) => e.t === "laststand"));
+  assert.equal(g.volleys.filter((v) => v.by === 1).length, 0);
 });

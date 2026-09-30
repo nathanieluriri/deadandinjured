@@ -4,6 +4,7 @@ import { TIMES } from "../shared/game.js";
 import { Desk } from "./desk.js";
 import { OrdersForm, ordersLine } from "./orders.js";
 import { telegramHtml, reportLines } from "./report.js";
+import { lesson } from "./drill.js";
 
 export const TAUNTS = ["Salute", "Fire in the hole!", "Ha ha ha", "Good game", "Come on then", "Boom"];
 const PHASE_MS = { supply: TIMES.supply, deploy: TIMES.deploy };
@@ -41,7 +42,7 @@ export class MatchView {
       "mineLog", "theirLog", "logCount", "logs", "logSeg", "rematchBtn", "homeBtn", "rematchLabel", "rematchSub", "verdict",
       "telegram", "tgBody", "tgStatus", "tgOrders", "tgOrdersLine", "tgAmend", "tgForm", "ends", "over",
       "rps", "stamp", "myCode", "taunts", "markBtn", "randomBtn", "recent", "bar", "tbSupplies", "tbCrates", "crateCount", "unread",
-      "scope", "scopeTag", "say", "reticle", "reticleTag", "live", "clock"]) this.el[id] = $(id);
+      "scope", "scopeTag", "say", "reticle", "reticleTag", "live", "clock", "drill", "drillFold", "drillStep", "drillSaid", "drillText"]) this.el[id] = $(id);
     this.windows = Object.fromEntries(["recon", "sniper", "smoke"].map((k) => [k, $(`w-${k}`)]));
     this.slotEls = [...this.el.slots.children];
     this.keys = new Map([...this.el.pad.querySelectorAll("[data-d]")].map((b) => [b.dataset.d, b]));
@@ -161,6 +162,10 @@ export class MatchView {
       this.app.home();
     });
     e.tgAmend.addEventListener("click", () => this.amend());
+    e.drillFold.addEventListener("click", () => {
+      this.fold(!e.drill.classList.contains("folded"));
+      this.sfx.play(e.drill.classList.contains("folded") ? "paperOff" : "paper");
+    });
     e.over.addEventListener("scroll", () => this.scrollCue(), { passive: true });
     new ResizeObserver(() => this.scrollCue()).observe(e.telegram);
     addEventListener("keydown", (ev) => {
@@ -252,10 +257,11 @@ export class MatchView {
     });
   }
 
-  start(conn, { solo = false, level = null } = {}) {
+  start(conn, { solo = false, level = null, drill = false } = {}) {
     this.stop();
     this.conn = conn;
-    this.solo = solo;
+    this.solo = solo || drill;
+    this.drill = drill;
     this.level = level;
     this.active = true;
     this.s = null;
@@ -293,6 +299,7 @@ export class MatchView {
     for (const b of this.bubbles) this.unsay(b);
     clearTimeout(this.aimOff);
     this.clearEnd();
+    this.coach(null);
   }
 
   enqueue(fn) {
@@ -412,6 +419,7 @@ export class MatchView {
     if (s.phase === "battle") this.sfx.mood(tension ? "tension" : "battle");
     else if (s.phase === "supply" || s.phase === "deploy") this.sfx.mood("battle");
     this.renderLogs();
+    this.coach(this.drill && s.phase === "battle" ? s : null);
     if (s.phase === "over" && s.result) this.fillOver(s.result);
     this.renderEnd();
     if (s.phase === "over" && this.pendingTell) {
@@ -446,6 +454,20 @@ export class MatchView {
       await this.dir.shot("deploy", prev ? 1.3 : 0.01);
       this.banner("Deploy");
       this.note(`<b>Hide your code:</b> four different digits. ${this.oppName} never sees it.`);
+    } else if (phase === "battle" && this.drill) {
+      // Training starts straight in the battle: over the top from the trench, or back to the
+      // home shot for another round of it.
+      this.dir.resetField();
+      this.dir.rpsShow(false);
+      this.dir.setCode(s.me.secret, { sound: false });
+      this.input = "";
+      this.renderSlots();
+      this.desk.reset({ restore: false });
+      this.desk.open("aim");
+      await (this.app.title.exitTo("home") || this.dir.shot("home", reduced() ? 0.01 : 1.3));
+      this.stamp("Training", "the drill squad holds fire", true);
+      this.sfx.play("bugle");
+      this.idleAt = performance.now();
     } else if (phase === "battle") {
       this.dir.rpsShow(false);
       this.dir.setCode(s.me.secret, { sound: false });
@@ -490,6 +512,8 @@ export class MatchView {
   }
 
   note(html, ms = 4800) {
+    // In training the lesson slip does the talking.
+    if (this.drill && html) return;
     const n = this.el.note;
     n.innerHTML = html || "";
     n.classList.toggle("on", !!html);
@@ -647,7 +671,7 @@ export class MatchView {
   async playOver(r) {
     const run = this.run;
     this.result = r;
-    if (this.solo && ["me", "opp", "draw"].includes(r.winner)) this.app.recordSolo({ me: "win", opp: "loss", draw: "draw" }[r.winner]);
+    if (this.solo && !this.drill && ["me", "opp", "draw"].includes(r.winner)) this.app.recordSolo({ me: "win", opp: "loss", draw: "draw" }[r.winner]);
     // The match state follows this event, so the battle's interface is cleared away now.
     this.setPhaseClass("over");
     this.desk.reset({ restore: false });
@@ -751,8 +775,8 @@ export class MatchView {
     const mine = !!s.rematch?.me;
     const theirs = !this.solo && (!!s.rematch?.opp || !!this.oppCalled);
     e.rematchBtn.hidden = !canCall;
-    let label = "Call for reinforcements";
-    let sub = this.solo ? "play again" : "ask for a rematch";
+    let label = this.drill ? "Train again" : "Call for reinforcements";
+    let sub = this.drill ? "a fresh code" : this.solo ? "play again" : "ask for a rematch";
     if (!online) {
       label = "The line is dead";
       sub = this.lineCut ? "the room has closed" : `${opp} went off the radio`;
@@ -819,6 +843,7 @@ export class MatchView {
     const s = this.s;
     if (!this.ended || this.el.rematchBtn.getAttribute("aria-disabled") === "true") return;
     this.sfx.play("crank");
+    if (this.drill) return this.app.drill();
     if (this.solo) return this.app.solo(this.level);
     this.conn?.send(s.offers ? { t: "rematch", orders: this.offer } : { t: "rematch" });
     this.s = { ...s, rematch: { ...s.rematch, me: true } };
@@ -868,6 +893,37 @@ export class MatchView {
     this.el.recent.hidden = true;
     this.clearPicks();
     this.sfx.play("found");
+  }
+
+  // The lesson slip in training: what just happened, and what to try next.
+  coach(s) {
+    const e = this.el;
+    const was = !e.drill.hidden;
+    e.drill.hidden = !s;
+    if (!s) {
+      this.taught = null;
+      if (was) this.app.layout();
+      return;
+    }
+    const l = lesson(s);
+    const key = `${l.step}|${l.said}|${l.text}`;
+    if (this.taught !== key) {
+      this.taught = key;
+      e.drillStep.textContent = `Lesson ${l.step + 1} of ${l.of}: ${l.name}`;
+      e.drillSaid.innerHTML = l.said;
+      e.drillSaid.hidden = !l.said;
+      e.drillText.innerHTML = l.text;
+      this.fold(false);
+      if (was) play(e.drill, [{ transform: "translate(-50%, -6px) rotate(-1.4deg)" }, { transform: "translate(-50%, 0) rotate(-0.5deg)" }], { duration: 420, easing: OUT, fill: "none" });
+    }
+    if (!was) this.app.layout();
+  }
+
+  // On a phone the slip folds to its heading while you aim, so the field shows; a new lesson
+  // opens it again.
+  fold(on) {
+    this.el.drill.classList.toggle("folded", on);
+    this.el.drillFold.setAttribute("aria-expanded", String(!on));
   }
 
   hurt(k) {
@@ -1009,6 +1065,7 @@ export class MatchView {
     this.idleAt = performance.now();
     if (this.markMode) return this.cycleMark(d);
     if (!this.canType()) return;
+    if (this.drill && innerWidth < 900) this.fold(true);
     if (this.input.includes(d)) {
       play(this.el.slots, [0, -6, 5, -4, 2, 0].map((x) => ({ transform: `translateX(${x}px)` })), { duration: 360, fill: "none" });
       this.sfx.play("error");
@@ -1076,6 +1133,7 @@ export class MatchView {
 
   opened(name) {
     if (name === "log") this.markRead();
+    if (this.drill && innerWidth < 900 && name !== "aim") this.fold(true);
     if (POWERS.includes(name)) this.app.icons?.preview(name, this.windows[name].querySelector(".photo"));
     this.refresh();
   }
@@ -1211,6 +1269,8 @@ export class MatchView {
     }
     for (const kind of POWERS) this.refreshSupply(kind);
     this.refreshBar();
+    // The lesson slip steps aside while a volley or a supply plays out on the field.
+    e.drill.classList.toggle("away", busy);
     this.updateReticle();
     e.delBtn.disabled = !this.canType() || !this.input;
     e.markBtn.disabled = s.phase !== "battle";

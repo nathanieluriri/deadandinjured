@@ -43,7 +43,8 @@ const PLACES = {
       { key: "solo", label: "Play the computer", plank: true },
       { key: "friend", label: "Play a friend", plank: true },
       { key: "quick", id: "quickBtn", label: "Quick match", plank: true },
-      { key: "board", id: "boardBtn", label: "Roll of honour", plank: true },
+      { key: "board", id: "boardBtn", label: "Leaderboard", plank: true },
+      { key: "drill", id: "drillBtn", label: "Tutorials", plank: true },
       { key: "manual", label: "Field manual" },
       { key: "sound", label: "Sound", toggle: true },
       { key: "tag", label: "Your dog tag" },
@@ -63,7 +64,7 @@ const PLACES = {
     hot: [{ key: "phone", id: "createBtn", label: "Open a room" }, { key: "chalkboard", label: "Dial a friend's code" }],
   },
   radio: { shot: "radio", back: "corner", note: "The radio post, searching the airwaves.", hot: [{ key: "clipboard", label: "Your orders" }] },
-  board: { shot: "board", back: "corner", note: "The roll of honour.", hot: [] },
+  board: { shot: "board", back: "corner", note: "The leaderboard.", hot: [] },
 };
 
 export class Title {
@@ -445,6 +446,7 @@ export class Title {
       case "friend": return this.go("signals");
       case "quick": return this.go("radio");
       case "board": return this.go("board");
+      case "drill": return app.drill();
       case "manual": return this.manual();
       case "sound": {
         app.sfx.unlock();
@@ -608,7 +610,7 @@ export class Title {
     return this.quick;
   }
 
-  // ---- the notice board: the roll of honour ------------------------------------------------
+  // ---- the notice board: the leaderboard ----------------------------------------------------
 
   async roll() {
     $("rollSheet").hidden = false;

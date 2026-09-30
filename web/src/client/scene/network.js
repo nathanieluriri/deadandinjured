@@ -26,10 +26,11 @@ export const PLACES = {
 
 // Each plank points roughly the way it leads, turned enough to read from the corner.
 const SIGNS = [
-  { key: "solo", text: "Play the computer", yaw: 0.35, y: 2.2 },
-  { key: "friend", text: "Play a friend", yaw: -2.74, y: 1.9 },
-  { key: "quick", text: "Quick match", yaw: -0.45, y: 1.6 },
-  { key: "board", text: "Roll of honour", yaw: -2.55, y: 1.3 },
+  { key: "solo", text: "Play the computer", yaw: 0.35, y: 2.3 },
+  { key: "friend", text: "Play a friend", yaw: -2.74, y: 2.02 },
+  { key: "quick", text: "Quick match", yaw: -0.45, y: 1.74 },
+  { key: "board", text: "Leaderboard", yaw: -2.55, y: 1.46 },
+  { key: "drill", text: "Tutorials", yaw: 0.05, y: 1.18 },
 ];
 
 function paint(w, h, draw) {
@@ -253,22 +254,23 @@ export class Network {
     const sz = z + 0.55;
     this.put(box(0.14, 2.7, 0.14, 0.03), sx, 1.35, sz);
     this.put(box(0.3, 0.12, 0.3, 0.02), sx, 0.06, sz);
-    const atlas = paint(1024, 512, (c, W, H) => {
+    const n = SIGNS.length;
+    const atlas = paint(1024, 128 * n, (c, W, H) => {
       const r = seeded(3);
-      for (let i = 0; i < 4; i++) {
-        const y = (i * H) / 4;
-        c.fillStyle = ["#8a6440", "#7a5431", "#946b43", "#80593a"][i];
-        c.fillRect(0, y, W, H / 4);
+      for (let i = 0; i < n; i++) {
+        const y = (i * H) / n;
+        c.fillStyle = ["#8a6440", "#7a5431", "#946b43", "#80593a", "#8e6843"][i];
+        c.fillRect(0, y, W, H / n);
         for (let g = 0; g < 26; g++) {
           c.strokeStyle = `rgba(30, 18, 8, ${0.08 + r() * 0.14})`;
           c.lineWidth = 1 + r() * 2;
           c.beginPath();
-          const gy = y + r() * (H / 4);
+          const gy = y + r() * (H / n);
           c.moveTo(0, gy);
           c.bezierCurveTo(W / 3, gy + (r() - 0.5) * 8, (2 * W) / 3, gy + (r() - 0.5) * 8, W, gy + (r() - 0.5) * 6);
           c.stroke();
         }
-        stencil(c, SIGNS[i].text.toUpperCase(), W / 2 - 20, y + H / 8 + 4, 62, "#efe6d0", { spray: 0.25 });
+        stencil(c, SIGNS[i].text.toUpperCase(), W / 2 - 20, y + H / n / 2 + 4, 62, "#efe6d0", { spray: 0.25 });
       }
     });
     const mat = new THREE.MeshLambertMaterial({ map: atlas });
@@ -277,8 +279,8 @@ export class Network {
       [box(0.09, 0.14, 0.01, 0.02), 0xb8b3a6],
       [cyl(0.004, 0.004, 0.22, 4).rotateZ(0.6).translate(-0.03, 0.12, 0), 0x8a857c],
     ]);
-    this.put(tag, sx + 0.08, 1.05, sz + 0.075);
-    this.anchors.tag = new THREE.Vector3(sx + 0.08, 1.05, sz + 0.08);
+    this.put(tag, sx - 0.03, 0.88, sz + 0.075);
+    this.anchors.tag = new THREE.Vector3(sx - 0.03, 0.88, sz + 0.08);
     this.signs = SIGNS.map((s, i) => {
       const shape = new THREE.Shape();
       const L = 1.55;
@@ -300,7 +302,7 @@ export class Network {
         const u0 = (pos.getX(k) + 0.1) / (L + 0.1);
         const u = back ? 1 - u0 : u0;
         const v = (pos.getY(k) + Hh) / (Hh * 2);
-        uv.setXY(k, u, 1 - (i + 1) / 4 + v / 4);
+        uv.setXY(k, u, 1 - (i + 1) / n + v / n);
       }
       const plank = new THREE.Mesh(geo, mat);
       const pivot = new THREE.Group();
@@ -316,7 +318,7 @@ export class Network {
     });
   }
 
-  // The notice board on the corner's left wall, where the roll of honour is pinned.
+  // The notice board on the corner's left wall, where the leaderboard is pinned.
   noticeBoard() {
     const { x, z } = PLACES.board;
     this.put(tint(slab(0.08, 1.2, 1.7), 0x5a3f27), x, 1.25, z, 0);
@@ -601,7 +603,7 @@ export class Network {
     this.group.add(this.plates);
   }
 
-  // The roll of honour pinned to the notice board: the first names, typed.
+  // The leaderboard pinned to the notice board: the first names, typed.
   roll(players) {
     const tex = this.rollTex || (this.rollTex = paint(512, 350, () => {}));
     const c = tex.image.getContext("2d");
@@ -610,7 +612,7 @@ export class Network {
     c.fillStyle = "#2b241d";
     c.textAlign = "center";
     c.font = '700 34px "Stardos Stencil", sans-serif';
-    c.fillText("ROLL OF HONOUR", 256, 44);
+    c.fillText("LEADERBOARD", 256, 44);
     c.fillRect(60, 58, 392, 3);
     c.textAlign = "left";
     c.font = '700 22px "Courier Prime", monospace';

@@ -44,6 +44,21 @@ export function newGame({ code, host, guest = null, now, timers = true, orders =
   };
 }
 
+// Training: the enemy squad hides a code and never fires back. You hold every turn, with a crate
+// for each supply, and no clock runs.
+export const DRILL_NAME = "Drill squad";
+export function newDrill({ name, now, secret = randomCode(), mine = randomCode() }) {
+  const g = newGame({ code: "DRILL", host: { id: "me", name }, guest: { id: "drill", name: DRILL_NAME }, now, timers: false });
+  g.drill = true;
+  for (const p of g.p) p.joined = true;
+  g.p[0].secret = mine;
+  g.p[1].secret = secret;
+  g.p[0].supplies = POWERS.length;
+  g.phase = "battle";
+  g.started = now;
+  return g;
+}
+
 const later = (g, now, ms) => (g.timers ? now + ms : null);
 const err = (msg) => ({ error: msg, events: [] });
 
@@ -188,6 +203,11 @@ function volley(g, s, guess, now, ev) {
   ev.push([o, { t: "volley", ...volleyView(v, o) }]);
 
   const cracked = v.dead === 4;
+  if (g.drill) {
+    if (cracked) return finish(g, s, "cracked", now, ev);
+    g.round++;
+    return;
+  }
   if (cracked && s === g.first) {
     g.lastStand = true;
     g.turn = o;

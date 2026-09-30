@@ -52,6 +52,25 @@ body[data-screen="match"] #manualBtn, body[data-screen="match"] #soundBtn, body[
 .note.on { opacity: 1; transform: translate(-50%, 0) rotate(-0.6deg); }
 .note:empty { display: none; }
 .note b { color: var(--ink-paper); font-weight: 700; }
+/* Training: the lesson slip, pinned under the header for as long as the drill runs. */
+.drill { position: absolute; top: calc(var(--pad) + var(--top) + 70px); left: 50%; transform: translate(-50%, 0) rotate(-0.5deg); width: min(460px, calc(100vw - 2 * var(--pad))); margin: 0; padding: 11px 16px 12px; border-radius: 1px; background: var(--tex-pad), #efe8d6; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45); color: var(--ink-paper-2); font: 400 13px/1.4 var(--typed); pointer-events: none; transition: opacity 0.4s var(--ease); }
+.drill[hidden] { display: none; }
+.drill::before { content: ""; position: absolute; top: -5px; left: 50%; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ff9a7a, #b8391f 60%, #5e1a0c); box-shadow: 0 2px 3px rgba(0, 0, 0, 0.5); }
+.drill p { margin: 0; }
+.drill.away { opacity: 0; }
+.drill-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; width: 100%; margin-bottom: 6px; padding: 0; color: var(--ink-paper); font: 700 14px/1.1 var(--stencil); letter-spacing: 0.1em; text-transform: uppercase; text-align: left; pointer-events: auto; }
+.drill-head em { font: italic 400 12px/1.2 var(--typed); letter-spacing: 0; text-transform: none; color: var(--pencil); text-align: right; }
+.drill-head em::after { content: "\25BE" / ""; display: inline-block; margin-left: 6px; font-style: normal; transition: rotate 0.25s var(--out); }
+.drill-head:focus-visible { outline: 2px dashed var(--ink-blue); outline-offset: 3px; }
+.drill.folded .drill-head { margin-bottom: 0; }
+.drill.folded .drill-head em::after { rotate: -90deg; }
+.drill.folded .drill-body { display: none; }
+@media (pointer: coarse) { .drill { padding-block: 0 10px; } .drill.folded { padding-bottom: 0; } .drill-head { min-height: 44px; align-items: center; margin-bottom: 0; } }
+.drill-said { margin-bottom: 5px !important; color: var(--ink-paper); }
+.drill-said[hidden] { display: none; }
+.drill b { color: var(--ink-paper); font-weight: 700; }
+.drill b.d { color: #b3301c; }
+.drill b.i { color: #9a5c10; }
 
 /* ---- the bar ------------------------------------------------------------------------------ */
 .bar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 20; display: none; justify-content: center; padding: 0 calc(8px + env(safe-area-inset-right, 0px)) calc(10px + var(--bottom)) calc(8px + env(safe-area-inset-left, 0px)); pointer-events: none; }
@@ -548,7 +567,7 @@ body[data-screen="match"] #manualBtn, body[data-screen="match"] #soundBtn, body[
 #manualDlg kbd { padding: 0 5px; border-radius: 3px; background: rgba(43, 36, 29, 0.1); font: 700 12px/1.6 var(--typed); color: var(--ink-paper); }
 
 /* ---- cinematics hide the interface -------------------------------------------------------- */
-body.cine .hud, body.cine .desk, body.cine .bar, body.cine .note, body.cine .top { opacity: 0; pointer-events: none; }
+body.cine .hud, body.cine .desk, body.cine .bar, body.cine .note, body.cine .drill, body.cine .top { opacity: 0; pointer-events: none; }
 
 /* ---- the volley stamps: painted through a stencil ----------------------------------------- */
 .stamp b, .stamp span { font-family: var(--stencil); font-weight: 700; font-variation-settings: normal; letter-spacing: 0.02em; line-height: 0.9; text-shadow: 0 3px 0 rgba(0, 0, 0, 0.35), 0 10px 30px rgba(0, 0, 0, 0.6); }

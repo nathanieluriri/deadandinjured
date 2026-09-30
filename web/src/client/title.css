@@ -1,5 +1,5 @@
 /* The title, lived in the trench: real buttons laid over the objects, paper tags, a typed slip
-   for each place, and paper sheets for orders, dialling, the clipboard and the roll of honour. */
+   for each place, and paper sheets for orders, dialling, the clipboard and the leaderboard. */
 body[data-screen="menu"] .brand, body[data-screen="menu"] #manualBtn, body[data-screen="menu"] #soundBtn { display: none; }
 #menu { z-index: 6; }
 .hots { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
