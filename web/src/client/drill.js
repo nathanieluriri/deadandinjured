@@ -1,60 +1,68 @@
-import { POWERS } from "../shared/rules.js";
+// Training: a scripted drill against a squad whose code is fixed, so every volley lands as a
+// lesson. The sergeant's slip reads the match as it stands and says what just happened, shows
+// what is known of their code, and asks for the next move, which the keypad and the supplies
+// are locked to.
+export const DRILL_CODE = "5019";
 
-// Training: the lessons are read off the match as it stands, so they follow whatever the player
-// does. Fire, read the result, then each supply with a volley between (one crate a turn), then
-// crack the code.
-const STEPS = ["Fire", "Dead and injured", "Recon", "Sniper", "Smoke", "Crack it"];
-const SPOT = ["first", "second", "third", "fourth"];
-const spaced = (g) => g.split("").join(" ");
+const LESSONS = ["Fire", "Injured", "Dead", "Missed", "Recon", "Smoke", "Marking", "Sniper", "Crack it"];
+const tiles = (s, cls = "") => `<span class="tiles${cls ? ` ${cls}` : ""}">${[...s].map((c) => `<i>${c}</i>`).join("")}</span>`;
+const pill = (cls, text) => `<span class="pill ${cls}">${text}</span>`;
+const want = (s) => tiles(s, "want");
+const struck = (s, cls) => `<span class="tiles">${[...s].map((c, i) => `<i class="${cls[i] || ""}">${c}</i>`).join("")}</span>`;
 
-const NEXT = { recon: "spotter plane", sniper: "rifle scope", smoke: "smoke canister" };
-const TEACH = {
-  recon: "Supplies cost a crate each, and you have one for every supply. Tap the <b>spotter plane</b> on the plank, pick a digit and send the plane: a green flare means that digit is in their code, a red one means it is not.",
-  sniper: "Tap the <b>rifle scope</b>. Pick a digit and one of their soldiers (tap him on the field, or his spot number). A hit proves that digit sits in his spot.",
-  smoke: "Smoke is for defence. Tap the <b>smoke canister</b> and pop smoke: the enemy's next volley only learns how many digits it hit, not how many dead and injured. The drill squad never fires, but in a real match pop it when they are close to cracking yours.",
-};
-
-function volleySaid(v) {
-  const g = spaced(v.guess);
-  if (!v.dead && !v.injured) return `<b>Nothing hit.</b> None of ${g} is in their code: rule them all out.`;
-  const dead = v.dead ? `<b class="d">${v.dead} dead</b>: ${v.dead === 1 ? "one of your digits is" : `${v.dead} of your digits are`} in the right place.` : "";
-  const more = v.dead ? (v.injured === 1 ? "one more is" : `${v.injured} more are`) : v.injured === 1 ? "one of your digits is" : `${v.injured} of your digits are`;
-  const hurt = v.injured ? `<b class="i">${v.injured} injured</b>: ${more} in their code, but in the wrong place.` : "";
-  return `Your volley ${g}. ${[dead, hurt].filter(Boolean).join(" ")}`;
+function result(v) {
+  if (!v) return "";
+  if (v.hits != null) return `${tiles(v.guess)} ${pill("n", `${v.hits} hits`)}`;
+  if (!v.dead && !v.injured) return `${tiles(v.guess)} ${pill("n", "nothing hit")}`;
+  const parts = [];
+  if (v.dead) parts.push(pill("d", `${v.dead} dead`));
+  if (v.injured) parts.push(pill("i", `${v.injured} injured`));
+  return `${tiles(v.guess)} ${parts.join(" ")}`;
 }
 
-function powerSaid(p) {
-  if (p.kind === "recon") return `<b>Recon:</b> ${p.args.digit} ${p.result ? "is in their code" : "is not in their code"}. It is marked on your keypad.`;
-  if (p.kind === "sniper") return p.result
-    ? `<b>Sniper:</b> a hit. ${p.args.digit} is their ${SPOT[p.args.pos]} digit.`
-    : `<b>Sniper:</b> a miss. ${p.args.digit} is not their ${SPOT[p.args.pos]} digit, though it may sit somewhere else.`;
-  return "<b>Smoke up.</b> Your squad is hidden until the enemy's next volley.";
-}
-
-// The lesson for a match state: its number, its name, what just happened and what to do next.
-export function lesson(s) {
+// The lesson for a match state and the marks on the keypad. `want` is the one move the drill
+// takes next: a guess typed in order, a supply with its picks, marks on the keypad, or a free
+// guess from the digits given.
+export function lesson(s, marks) {
   const mine = s.volleys.filter((v) => v.by === "me");
+  const n = mine.length;
   const used = new Set(s.powers.map((p) => p.kind));
-  const last = s.powers.at(-1);
-  const said = last && last.at === s.volleys.length ? powerSaid(last) : mine.length ? volleySaid(mine.at(-1)) : "";
-  const next = POWERS.find((k) => !used.has(k));
-  let step;
-  let text;
-  if (!mine.length) {
-    step = 0;
-    text = "The drill squad has hidden a code of four different digits, and they will not fire back. Tap the <b>field gun</b> on the plank, aim four different digits, then <b>Fire</b>.";
-  } else if (mine.length === 1 && !used.size) {
-    step = 1;
-    text = "<b class=\"d\">Dead</b> is a right digit in the right place, <b class=\"i\">injured</b> a right digit in the wrong place. You learn how many, never which. Swap some digits and fire again to narrow it down.";
-  } else if (next) {
-    step = 2 + POWERS.indexOf(next);
-    text = s.me.powerUsed ? `One crate goes out a turn: fire a volley, then try the ${NEXT[next]}.` : TEACH[next];
-  } else {
-    step = 5;
-    const best = Math.max(0, ...mine.map((v) => (v.dead || 0) + (v.injured || 0)));
-    text = best === 4
-      ? `Now crack it: four dead. You have found all four digits${mine.at(-1).dead + mine.at(-1).injured === 4 ? " in your last volley" : ""}, so only their order is left.`
-      : "Now crack it: four dead. Open the <b>notebook</b> to compare your volleys, and long press a key to mark a digit in or out.";
+  const theirs = new Set((s.oppPowers || []).map((p) => p.kind));
+  const last = mine[n - 1];
+  const unknown = { slots: ["?", "?", "?", "?"] };
+  const step = (lessonNo, o) => ({ lesson: lessonNo, of: LESSONS.length, name: LESSONS[lessonNo], legend: null, tray: null, said: "", auto: null, ...o });
+
+  if (n === 0) return step(0, { said: "The drill squad hides four different digits and never fires back.", tray: unknown, text: `Fire ${want("1234")}.`, want: { guess: "1234" } });
+  if (n === 1) return step(1, { said: result(last), legend: "injured", tray: unknown, text: `One of them is in their code, in another spot. Fire ${want("5678")}.`, want: { guess: "5678" } });
+  if (n === 2) return step(2, { said: result(last), legend: "dead", tray: unknown, text: `One of them is in their code, in the same spot. Fire ${want("6782")}.`, want: { guess: "6782" } });
+  if (!used.has("recon")) {
+    return step(3, {
+      said: `${result(last)}<span class="drill-line">${struck("5678", ["dead", "out", "out", "out"])} so the dead one was 5: spot 1.</span>`, legend: "miss", auto: { out: ["6", "7", "8", "2"] },
+      tray: { slots: ["5", "?", "?", "?"] }, text: `Recon asks if one digit is in their code. Send the plane for ${want("9")}.`, want: { power: "recon", digit: "9" },
+    });
   }
-  return { step, of: STEPS.length, name: STEPS[step], said, text };
+  if (!theirs.has("smoke")) return step(4, { said: `<span class="flare"></span>Green flare: 9 is in their code.`, tray: { slots: ["5", "?", "?", "?"], pool: ["9"] }, text: "Stand by.", want: { wait: true } });
+  if (!used.has("smoke")) return step(5, { said: "They popped smoke. Your next volley only counts hits.", tray: { slots: ["5", "?", "?", "?"], pool: ["9"] }, text: "You have smoke too. Pop it.", want: { power: "smoke" } });
+  if (n === 3) return step(5, { said: "Smoke up. In a real match, their next volley would only see hits.", tray: { slots: ["5", "?", "?", "?"], pool: ["9"] }, text: `Fire ${want("5901")} into the smoke.`, want: { guess: "5901" } });
+  const marked = ["5", "0", "1"].filter((d) => marks.get(d) === "in");
+  if (n === 4 && marked.length < 3) {
+    return step(6, {
+      said: `${result(last)}<span class="drill-line">All four are in their code. The smoke hid the spots.</span>`, tray: { slots: ["5", "?", "?", "?"], pool: ["9"] },
+      text: `Mark them in: tap the pencil, then ${want("501")} twice each (${struck("5", ["out"])} then ${struck("5", ["in"])}).`, want: { marks: ["5", "0", "1"] },
+    });
+  }
+  if (!used.has("sniper")) {
+    return step(7, {
+      said: "All four marked.", tray: { slots: ["5", "?", "?", "?"], pool: ["9", "0", "1"] }, auto: { pencil: false },
+      text: `The sniper checks one digit in one spot. Pick ${want("0")} and the soldier in spot 2.`, want: { power: "sniper", digit: "0", pos: 1 },
+    });
+  }
+  if (n === 4) return step(8, { said: "Hit: 0 is in spot 2.", tray: { slots: ["5", "0", "?", "?"], pool: ["9", "1"] }, text: `Fire ${want("5091")}.`, want: { guess: "5091" } });
+  if (n === 5) {
+    return step(8, {
+      said: `${result(last)}<span class="drill-line">5 and 0 are right. 9 and 1 are in, but swapped.</span>`, tray: { slots: ["5", "0", "9", "1"], swap: true },
+      text: "Crack it: fire their code.", want: { free: ["5", "0", "1", "9"] },
+    });
+  }
+  return step(8, { said: `${result(last)}<span class="drill-line">Not yet.</span>`, tray: { slots: ["5", "0", "9", "1"], swap: true }, text: `Swap them: fire ${want("5019")}.`, want: { guess: "5019" } });
 }

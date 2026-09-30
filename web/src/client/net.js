@@ -1,4 +1,5 @@
-import { newGame, newDrill, join, act, tick, view, shiftClocks, rulesOf } from "../shared/game.js";
+import { newGame, newDrill, drillSmoke, join, act, tick, view, shiftClocks, rulesOf } from "../shared/game.js";
+import { DRILL_CODE } from "./drill.js";
 import { Commander, LEVELS } from "./ai.js";
 import { randomCode, RPS, packOrders, cleanOrders } from "../shared/rules.js";
 
@@ -235,11 +236,12 @@ export class LocalMatch {
   }
 }
 
-// Training: the drill squad hides a code and holds still while you fire at it.
+// Training: the drill squad hides the drill's code and holds still while you fire at it. Their
+// one move is to pop smoke once your plane has been over.
 export class DrillMatch extends LocalMatch {
   constructor(name, onMessage) {
     super(null, name, onMessage);
-    this.g = newDrill({ name, now: Date.now() });
+    this.g = newDrill({ name, now: Date.now(), secret: DRILL_CODE });
     queueMicrotask(() => {
       this.onMessage({ t: "presence", opp: true });
       this.onMessage(view(this.g, 0, Date.now()));
@@ -247,7 +249,12 @@ export class DrillMatch extends LocalMatch {
   }
 
   send(msg) {
-    if (msg.t !== "taunt") super.send(msg);
+    if (msg.t === "taunt") return;
+    super.send(msg);
+    if (msg.t === "power" && msg.kind === "recon" && !this.smoked && this.g.powers.some((p) => p.by === 0 && p.kind === "recon")) {
+      this.smoked = true;
+      this.later(400, () => this.deliver(drillSmoke(this.g)));
+    }
   }
 
   think() {}

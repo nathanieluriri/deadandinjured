@@ -42,7 +42,7 @@ export class MatchView {
       "mineLog", "theirLog", "logCount", "logs", "logSeg", "rematchBtn", "homeBtn", "rematchLabel", "rematchSub", "verdict",
       "telegram", "tgBody", "tgStatus", "tgOrders", "tgOrdersLine", "tgAmend", "tgForm", "ends", "over",
       "rps", "stamp", "myCode", "taunts", "markBtn", "randomBtn", "recent", "bar", "tbSupplies", "tbCrates", "crateCount", "unread",
-      "scope", "scopeTag", "say", "reticle", "reticleTag", "live", "clock", "drill", "drillFold", "drillStep", "drillSaid", "drillText"]) this.el[id] = $(id);
+      "scope", "scopeTag", "say", "reticle", "reticleTag", "live", "clock", "drill", "drillFold", "drillStep", "drillSaid", "drillLegend", "drillTray", "drillText"]) this.el[id] = $(id);
     this.windows = Object.fromEntries(["recon", "sniper", "smoke"].map((k) => [k, $(`w-${k}`)]));
     this.slotEls = [...this.el.slots.children];
     this.keys = new Map([...this.el.pad.querySelectorAll("[data-d]")].map((b) => [b.dataset.d, b]));
@@ -117,11 +117,9 @@ export class MatchView {
     e.fireBtn.addEventListener("click", () => this.fire());
     for (const b of e.rps.querySelectorAll("[data-pick]")) b.addEventListener("click", () => this.pick(b.dataset.pick));
     e.markBtn.addEventListener("click", () => {
-      this.markMode = !this.markMode;
-      e.markBtn.setAttribute("aria-pressed", String(this.markMode));
-      e.pad.classList.toggle("marking", this.markMode);
+      this.setMarkMode(!this.markMode);
       this.sfx.play("click");
-      if (this.markMode) this.app.toast("Tap digits to mark them out, then in");
+      if (this.markMode && !this.drill) this.app.toast("Tap digits to mark them out, then in");
     });
     e.randomBtn.addEventListener("click", () => {
       if (this.s?.phase !== "deploy" || this.s.me.secret) return;
@@ -267,9 +265,13 @@ export class MatchView {
     this.s = null;
     this.q = Promise.resolve();
     this.input = "";
-    this.markMode = false;
-    this.el.markBtn.setAttribute("aria-pressed", "false");
-    this.el.pad.classList.remove("marking");
+    this.setMarkMode(false);
+    for (const b of this.keys.values()) {
+      b.disabled = false;
+      b.classList.remove("hint", "next");
+    }
+    this.el.fireBtn.classList.remove("hint");
+    this.el.markBtn.classList.remove("hint");
     this.marks.clear();
     this.renderMarks();
     this.animating = 0;
@@ -615,6 +617,8 @@ export class MatchView {
   }
 
   async playPower(p) {
+    // In the drill their smoke waits a moment, so the plane's report can be read first.
+    if (p.by !== "me" && this.drill) await wait(2.4);
     this.animating++;
     this.refresh();
     if (p.by === "me") {
@@ -640,7 +644,7 @@ export class MatchView {
       await wait(1.1);
     } else {
       const text = { recon: "sent a spotter plane over your line", sniper: "has a sniper on you", smoke: "popped smoke" }[p.kind];
-      this.app.toast(`${this.oppName} ${text}`);
+      if (!this.drill) this.app.toast(`${this.oppName} ${text}`);
       if (p.kind === "smoke") {
         this.sfx.play("smoke", { far: 0.6 });
         this.dir.smoke("opp", true);
@@ -895,28 +899,108 @@ export class MatchView {
     this.sfx.play("found");
   }
 
-  // The lesson slip in training: what just happened, and what to try next.
+  // The sergeant's slip in training: what just happened, what is known of their code, and the
+  // one move to make next. The keypad and the supplies are locked to that move.
   coach(s) {
     const e = this.el;
     const was = !e.drill.hidden;
     e.drill.hidden = !s;
     if (!s) {
       this.taught = null;
+      this.want = null;
       if (was) this.app.layout();
       return;
     }
-    const l = lesson(s);
-    const key = `${l.step}|${l.said}|${l.text}`;
+    const l = lesson(s, this.marks);
+    this.want = l.want;
+    const key = `${l.lesson}|${l.said}|${l.text}`;
     if (this.taught !== key) {
       this.taught = key;
-      e.drillStep.textContent = `Lesson ${l.step + 1} of ${l.of}: ${l.name}`;
+      e.drillStep.textContent = `Lesson ${l.lesson + 1} of ${l.of}: ${l.name}`;
       e.drillSaid.innerHTML = l.said;
       e.drillSaid.hidden = !l.said;
+      this.legend(l.legend);
+      this.tray(l.tray);
       e.drillText.innerHTML = l.text;
       this.fold(false);
       if (was) play(e.drill, [{ transform: "translate(-50%, -6px) rotate(-1.4deg)" }, { transform: "translate(-50%, 0) rotate(-0.5deg)" }], { duration: 420, easing: OUT, fill: "none" });
+      if (l.auto?.out) this.crossOut(l.auto.out);
+      if (l.auto?.pencil === false && this.markMode) this.setMarkMode(false);
+      // The keypad comes up for a guess or the pencil; on a phone it steps aside for a supply,
+      // so the slip and the plank stay in view.
+      const w = l.want;
+      if (w.guess || w.free || w.marks) {
+        if (!this.desk.isOpen("aim")) this.desk.open("aim");
+      } else if (innerWidth < 900 && this.desk.isOpen("aim")) this.desk.minimise("aim");
+      this.sfx.play("paper");
     }
     if (!was) this.app.layout();
+  }
+
+  // The three ways a digit can land, the one just seen lit and moving.
+  legend(rule) {
+    const e = this.el;
+    e.drillLegend.hidden = !rule;
+    if (!rule) return;
+    if (!e.drillLegend.firstChild) {
+      e.drillLegend.innerHTML = [["dead", "same spot"], ["injured", "other spot"], ["miss", "not in their code"]].map(([k, note]) => `<span class="rule" data-rule="${k}"><span class="rule-pic"><i class="rg">?</i><span class="rc"><i></i><i></i></span></span><b>${k === "miss" ? "missed" : k}</b><small>${note}</small></span>`).join("");
+    }
+    for (const r of e.drillLegend.children) r.classList.toggle("lit", r.dataset.rule === rule);
+  }
+
+  // Their code as far as it is known: four slots, the digits found but not placed beside them.
+  tray(t) {
+    const e = this.el;
+    e.drillTray.hidden = !t;
+    if (!t) return;
+    const slots = t.slots.map((d, i) => `<i class="${d === "?" ? "q" : ""}${t.swap && i >= 2 ? " swap" : ""}">${d}</i>`).join("");
+    const pool = t.pool?.length ? `<span class="pool"><small>in</small>${t.pool.map((d) => `<i>${d}</i>`).join("")}</span>` : "";
+    e.drillTray.innerHTML = `<small>Their code</small><span class="slots-known${t.swap ? " swapping" : ""}">${slots}</span>${pool}`;
+  }
+
+  // A miss crosses its digits out on the keypad, one after another, as the player would.
+  crossOut(digits) {
+    digits.forEach((d, i) => setTimeout(() => {
+      if (!this.drill) return;
+      this.setMark(d, "out");
+      this.sfx.play("tick", { hi: false });
+    }, 350 + i * 220));
+  }
+
+  // The keypad and the pencil lit for the drill's move, and the slip's tiles ticked off as it is made.
+  refreshDrill(busy) {
+    const e = this.el;
+    const w = this.want;
+    e.drill.classList.toggle("away", busy);
+    for (const [d, b] of this.keys) {
+      let on = true;
+      let hint = false;
+      let next = false;
+      if (w?.guess) {
+        const at = w.guess.indexOf(d);
+        on = at === this.input.length;
+        hint = at >= this.input.length;
+        next = on;
+      } else if (w?.free) {
+        on = w.free.includes(d);
+        hint = on;
+      } else if (w?.marks) {
+        on = this.markMode && w.marks.includes(d);
+        hint = on && this.marks.get(d) !== "in";
+      } else if (w) on = false;
+      b.disabled = !on;
+      b.classList.toggle("hint", hint);
+      b.classList.toggle("next", next && !busy);
+    }
+    e.markBtn.disabled = !(w?.marks && !this.markMode);
+    e.markBtn.classList.toggle("hint", !!w?.marks && !this.markMode);
+    e.fireBtn.classList.toggle("hint", !e.fireBtn.disabled);
+    const tiles = e.drillText.querySelectorAll(".tiles.want i");
+    tiles.forEach((t, i) => {
+      const d = t.textContent;
+      const done = w?.guess ? this.input[i] === d : w?.marks ? this.marks.get(d) === "in" : false;
+      t.classList.toggle("done", done);
+    });
   }
 
   // On a phone the slip folds to its heading while you aim, so the field shows; a new lesson
@@ -1064,7 +1148,7 @@ export class MatchView {
   press(d) {
     this.idleAt = performance.now();
     if (this.markMode) return this.cycleMark(d);
-    if (!this.canType()) return;
+    if (!this.canType() || !this.allows(d)) return;
     if (this.drill && innerWidth < 900) this.fold(true);
     if (this.input.includes(d)) {
       play(this.el.slots, [0, -6, 5, -4, 2, 0].map((x) => ({ transform: `translateX(${x}px)` })), { duration: 360, fill: "none" });
@@ -1107,6 +1191,7 @@ export class MatchView {
       this.note(`<b>Code locked.</b> Waiting for ${this.oppName} to deploy.`);
       this.refresh();
     } else if (s.phase === "battle" && s.turn === "me" && isCode(this.input)) {
+      if (this.want?.guess && this.input !== this.want.guess) return;
       this.firing = true;
       this.sfx.play("click");
       this.conn?.send({ t: "fire", guess: this.input });
@@ -1191,13 +1276,15 @@ export class MatchView {
 
   canPower(kind) {
     const s = this.s;
-    return !!s && s.phase === "battle" && s.turn === "me" && !this.animating && s.me.supplies > 0 && !s.me.powerUsed && !this.powerSent && !(kind === "smoke" && s.me.smoke);
+    return !!s && s.phase === "battle" && s.turn === "me" && !this.animating && s.me.supplies > 0 && (this.drill || !s.me.powerUsed) && !this.powerSent && !(kind === "smoke" && s.me.smoke);
   }
 
   usePower(kind) {
     if (!this.canPower(kind)) return;
     const sel = this.sel[kind] || {};
     if (kind !== "smoke" && (sel.digit == null || (kind === "sniper" && sel.pos == null))) return;
+    const w = this.want;
+    if (this.drill && (w?.power !== kind || (w.digit != null && sel.digit !== w.digit) || (w.pos != null && sel.pos !== w.pos))) return;
     this.conn?.send({ t: "power", kind, digit: sel.digit, pos: sel.pos });
     this.powerSent = true;
     this.sfx.play("stamp");
@@ -1216,7 +1303,15 @@ export class MatchView {
     if (this.aimAt) this.el.reticleTag.textContent = `Spot ${pos + 1}`;
   }
 
+  setMarkMode(on) {
+    this.markMode = on;
+    this.el.markBtn.setAttribute("aria-pressed", String(on));
+    this.el.pad.classList.toggle("marking", on);
+    if (this.drill && this.s) this.refresh();
+  }
+
   cycleMark(d) {
+    if (this.drill && !this.want?.marks?.includes(d)) return;
     const cur = this.marks.get(d);
     const next = !cur ? "out" : cur === "out" ? "in" : null;
     this.setMark(d, next);
@@ -1227,6 +1322,20 @@ export class MatchView {
     if (mark) this.marks.set(d, mark);
     else this.marks.delete(d);
     this.renderMarks();
+    if (this.drill && this.s) {
+      this.coach(this.s);
+      this.refresh();
+    }
+  }
+
+  // In the drill the keypad types only the digit the lesson asks for next, or one of the digits
+  // it leaves free.
+  allows(d) {
+    const w = this.want;
+    if (!this.drill || !w) return true;
+    if (w.guess) return w.guess[this.input.length] === d;
+    if (w.free) return w.free.includes(d);
+    return false;
   }
 
   renderMarks() {
@@ -1265,15 +1374,14 @@ export class MatchView {
       if (s.me.secret) this.note(`<b>Code locked.</b> ${s.opp?.ready ? "Both codes are in." : `Waiting for ${this.oppName} to deploy.`}`);
     } else if (s.phase === "battle") {
       e.fireBtn.textContent = "FIRE";
-      e.fireBtn.disabled = busy || !my || !isCode(this.input) || this.firing;
+      e.fireBtn.disabled = busy || !my || !isCode(this.input) || this.firing || (this.want?.guess != null && this.input !== this.want.guess);
     }
     for (const kind of POWERS) this.refreshSupply(kind);
     this.refreshBar();
-    // The lesson slip steps aside while a volley or a supply plays out on the field.
-    e.drill.classList.toggle("away", busy);
     this.updateReticle();
     e.delBtn.disabled = !this.canType() || !this.input;
     e.markBtn.disabled = s.phase !== "battle";
+    if (this.drill) this.refreshDrill(busy);
     e.randomBtn.disabled = s.phase !== "deploy" || !!s.me.secret;
     if (s.phase === "battle") {
       e.turn.classList.toggle("mine", my);
@@ -1293,7 +1401,7 @@ export class MatchView {
     if (!s || s.phase !== "battle" || s.turn !== "me") return "Supplies go out on your turn";
     if (s.me.supplies < 1) return "No crates left";
     if (kind === "smoke" && s.me.smoke) return "Your smoke is already up";
-    if (s.me.powerUsed || this.powerSent) return "One crate a turn";
+    if ((s.me.powerUsed && !this.drill) || this.powerSent) return "One crate a turn";
     if (this.animating) return "Wait for the smoke to clear";
     return "";
   }
@@ -1305,7 +1413,7 @@ export class MatchView {
     if (!s || s.phase !== "battle") return "dim";
     if (s.me.supplies < 1) return "grey";
     if (s.turn !== "me") return "dim";
-    if (s.me.powerUsed || this.powerSent || (kind === "smoke" && s.me.smoke)) return "lock";
+    if ((s.me.powerUsed && !this.drill) || this.powerSent || (kind === "smoke" && s.me.smoke)) return "lock";
     return this.animating ? "dim" : "on";
   }
 
@@ -1323,9 +1431,19 @@ export class MatchView {
     const short = store(`di.learned.${kind}`) === "1";
     const btext = short ? brief.dataset.short : brief.dataset.brief;
     if (brief.textContent !== btext) brief.textContent = btext;
-    w.classList.toggle("ready", ready);
-    w.querySelector("[data-go]").disabled = !ready;
-    for (const b of w.querySelectorAll(".pick button")) b.disabled = !ok;
+    const want = this.drill ? this.want : null;
+    const asked = want?.power === kind;
+    const fits = !want || (asked && (want.digit == null || sel.digit === want.digit) && (want.pos == null || sel.pos === want.pos));
+    w.classList.toggle("ready", ready && fits);
+    const go = w.querySelector("[data-go]");
+    go.disabled = !ready || !fits;
+    go.classList.toggle("hint", asked && ready && fits);
+    for (const b of w.querySelectorAll(".pick button")) {
+      const key = b.closest(".spots") ? "pos" : "digit";
+      const wanted = asked && want[key] != null && String(want[key]) === b.dataset.v;
+      b.disabled = !ok || (want && !wanted);
+      b.classList.toggle("hint", wanted && b.getAttribute("aria-pressed") !== "true");
+    }
   }
 
   refreshBar() {
@@ -1339,11 +1457,20 @@ export class MatchView {
     for (const kind of POWERS) {
       const b = e.bar.querySelector(`[data-open="${kind}"]`);
       b.hidden = !rules[kind];
-      const st = this.supplyState(kind);
+      let st = this.supplyState(kind);
+      let why = this.why(kind);
+      // The drill hands out one supply at a time.
+      const asked = this.drill && this.want?.power === kind;
+      if (this.drill && !asked) {
+        st = "dim";
+        why = "Not yet: follow the drill";
+      }
+      b.disabled = this.drill && !asked;
+      b.classList.toggle("hint", asked && this.desk.state(kind) !== "front");
       b.dataset.clay = st;
-      const why = this.why(kind);
       b.setAttribute("aria-description", why || "Ready");
       this.app.icons?.setState(kind, st);
+      this.app.icons?.setPulse(kind, asked && this.desk.state(kind) !== "front");
       if (!rules[kind] && this.desk.state(kind) !== "closed") this.desk.close(kind);
     }
     const left = s.me.supplies;
@@ -1421,7 +1548,7 @@ export class MatchView {
     this.matchClock();
     const s = this.s;
     const t = this.el.timer;
-    if (this.active && !this.ended && s?.phase === "battle" && s.turn === "me" && !this.animating && !this.firing && this.idleAt && performance.now() - this.idleAt > 11000) {
+    if (this.active && !this.ended && !this.drill && s?.phase === "battle" && s.turn === "me" && !this.animating && !this.firing && this.idleAt && performance.now() - this.idleAt > 11000) {
       this.idleAt = performance.now() + 5000;
       this.banner(this.input.length === 4 ? "Ready: hit Fire" : "Your shot", 3200);
       this.el.turn.classList.add("nudge");

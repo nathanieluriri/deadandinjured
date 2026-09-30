@@ -235,45 +235,74 @@ for (const [w, h] of [[390, 844], [844, 390], [1440, 900]]) {
   check(s.screen === "menu" && s.place === "corner" && s.paraded, "Back to base walks to the corner, the commanders back on parade", s);
 }
 
-// 4. Tutorials: over the top into a drill the enemy never fires back in, a lesson for each step,
-// nothing recorded, and training again from the telephone.
+// 4. Tutorials: over the top into a scripted drill the enemy never fires back in. The keypad and
+// the supplies take only the move each lesson asks for, a lesson follows each move, nothing is
+// recorded, and the telephone starts the drill again.
 {
   const p = await page(1280, 800, { name: `Drill${stamp}` });
   await enter(p);
   await at(p, "corner");
   const before = await p.evaluate(async () => (await (await fetch("/api/me")).json()).player);
   await hot(p, "Tutorials");
-  // Settled once the n-th move has played out and its state has arrived.
+  // Settled once the n-th move has played out and its lesson is up.
   const ready = (n = 0) => p.waitForFunction((k) => {
     const v = window.__app.view;
-    return v.s?.phase === "battle" && v.s.volleys.length + v.s.powers.length === k && !v.animating && !document.getElementById("drill").hidden;
+    return v.s?.phase === "battle" && v.s.volleys.length + v.s.powers.length + (v.s.oppPowers?.length || 0) === k && !v.animating && !document.getElementById("drill").hidden;
   }, n, { timeout: 180000, polling: 250 });
   const step = () => p.evaluate(() => document.getElementById("drillStep").textContent);
+  const keys = () => p.evaluate(() => [...document.querySelectorAll("#pad [data-d]")].filter((b) => !b.disabled).map((b) => b.dataset.d).join(""));
   await ready();
   let s = await title(p);
-  check(s.screen === "match" && !s.place && !s.paraded && (await step()).startsWith("Lesson 1 of 6"), "Tutorials climbs over the top into the drill", s);
-  const secret = await p.evaluate(() => window.__app.view.conn.g.p[1].secret);
-  const act = (m) => p.evaluate((x) => window.__app.view.conn.send(x), m);
-  const other = [..."0123456789"].filter((d) => !secret.includes(d));
-  const lessons = [];
-  for (const m of [
-    { t: "fire", guess: other.slice(0, 4).join("") },
-    { t: "fire", guess: secret[1] + secret[0] + other[0] + other[1] },
-    { t: "power", kind: "recon", digit: secret[2] },
-    { t: "fire", guess: other.slice(2, 6).join("") },
-    { t: "power", kind: "sniper", digit: secret[0], pos: 0 },
-    { t: "fire", guess: other.slice(1, 5).join("") },
-    { t: "power", kind: "smoke" },
-  ]) {
-    await act(m);
-    await ready(lessons.length + 1);
-    await sleep(300);
-    lessons.push(await step());
-  }
-  check(lessons.map((l) => l.split(":")[0]).join() === "Lesson 2 of 6,Lesson 3 of 6,Lesson 4 of 6,Lesson 4 of 6,Lesson 5 of 6,Lesson 5 of 6,Lesson 6 of 6", "a lesson follows each step", lessons);
+  check(s.screen === "match" && !s.place && !s.paraded && (await step()).startsWith("Lesson 1 of 9"), "Tutorials climbs over the top into the drill", s);
+  check((await keys()) === "1", "only the lesson's next digit is live on the keypad", await keys());
+  // A stray digit is refused; the asked-for ones go in.
+  await p.evaluate(() => { const v = window.__app.view; v.press("7"); v.press("1"); v.press("2"); });
+  check((await p.evaluate(() => window.__app.view.input)) === "12" && (await keys()) === "3", "the keypad types only the drill's guess, in order");
+  await p.evaluate(() => { const v = window.__app.view; v.press("3"); v.press("4"); v.fire(); });
+  await ready(1);
+  check((await step()).startsWith("Lesson 2 of 9: Injured"), "the first volley is explained", await step());
+  const bar = () => p.evaluate(() => [...document.querySelectorAll("#bar [data-open]")].filter((b) => !b.disabled).map((b) => b.dataset.open).join(","));
+  check((await bar()) === "aim,log,chat", "the supplies wait for their lesson", await bar());
+  const type = async (g) => {
+    await p.evaluate((g) => { const v = window.__app.view; for (const d of g) v.press(d); v.fire(); }, g);
+  };
+  await type("5678");
+  await ready(2);
+  await type("6782");
+  await ready(3);
+  check((await step()).startsWith("Lesson 4 of 9: Missed") && (await bar()) === "aim,recon,log,chat", "a miss hands over to recon", [await step(), await bar()]);
+  await p.waitForFunction(() => ["6", "7", "8", "2"].every((d) => window.__app.view.marks.get(d) === "out"), null, { timeout: 10000 });
+  await p.evaluate(() => window.__app.view.desk.open("recon"));
+  check(await p.evaluate(() => [...document.querySelectorAll("#w-recon .pick button")].filter((b) => !b.disabled).map((b) => b.dataset.v).join("")) === "9", "the plane takes only the digit asked for");
+  await p.evaluate(() => document.querySelector('#w-recon .pick [data-v="9"]').click());
+  await p.evaluate(() => document.querySelector("#w-recon [data-go]").click());
+  // The recon, then the drill squad's smoke.
+  await ready(5);
+  check((await step()).startsWith("Lesson 6 of 9: Smoke") && (await bar()) === "aim,smoke,log,chat", "their smoke hands over to yours", [await step(), await bar()]);
+  await p.evaluate(() => window.__app.view.desk.open("smoke"));
+  await p.evaluate(() => document.querySelector("#w-smoke [data-go]").click());
+  await ready(6);
+  await type("5901");
+  await ready(7);
+  check((await step()).startsWith("Lesson 7 of 9: Marking") && (await keys()) === "", "four hits in the smoke lead to marking, keys off until the pencil", [await step(), await keys()]);
+  await p.evaluate(() => document.getElementById("markBtn").click());
+  check([...(await keys())].sort().join("") === "015", "the pencil frees the digits to mark", await keys());
+  await p.evaluate(() => { const v = window.__app.view; for (const d of "501") { v.press(d); v.press(d); } });
+  await sleep(300);
+  check((await step()).startsWith("Lesson 8 of 9: Sniper") && !(await p.evaluate(() => window.__app.view.markMode)), "marking done, the pencil put down, the sniper is next", await step());
+  await p.evaluate(() => window.__app.view.desk.open("sniper"));
+  await p.evaluate(() => { document.querySelector('#w-sniper .pick.digits [data-v="0"]').click(); document.querySelector('#w-sniper .pick.spots [data-v="1"]').click(); });
+  await p.evaluate(() => document.querySelector("#w-sniper [data-go]").click());
+  await ready(8);
+  await type("5091");
+  await ready(9);
+  check((await step()).startsWith("Lesson 9 of 9: Crack it") && (await keys()) === "1590", "the last lesson frees their four digits", [await step(), await keys()]);
+  await type("5910");
+  await ready(10);
+  check((await keys()) === "5", "a wrong order gets the answer, locked in", await keys());
   const opp = await p.evaluate(() => window.__app.view.s.volleys.filter((v) => v.by === "opp").length);
   check(opp === 0, "the drill squad never fires", opp);
-  await act({ t: "fire", guess: secret });
+  await type("5019");
   await p.waitForFunction(() => document.body.classList.contains("told"), null, { timeout: 180000, polling: 250 });
   const end = await p.evaluate(() => ({ label: document.getElementById("rematchLabel").textContent, slip: !document.getElementById("drill").hidden }));
   check(end.label === "Train again" && !end.slip, "the drill ends with the telegram and Train again", end);
@@ -281,7 +310,7 @@ for (const [w, h] of [[390, 844], [844, 390], [1440, 900]]) {
   check(JSON.stringify(after) === JSON.stringify(before), "training records nothing", { before, after });
   await click(p, "rematchBtn");
   await ready();
-  check((await step()).startsWith("Lesson 1 of 6") && (await p.evaluate(() => window.__app.view.s.volleys.length)) === 0, "Train again starts a fresh drill");
+  check((await step()).startsWith("Lesson 1 of 9") && (await p.evaluate(() => window.__app.view.s.volleys.length)) === 0 && (await keys()) === "1", "Train again starts the drill over");
   await p.context().close();
 }
 
