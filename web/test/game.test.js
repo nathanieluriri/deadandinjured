@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { isCode, score, rps, randomCode, allCodes, roomCode, ROOM_RE, cleanOrders, packOrders, parseOrders, randomOrders, STANDARD_ORDERS } from "../src/shared/rules.js";
-import { newGame, newDrill, join, act, tick, view, TIMES, turnMs, nextWake, shiftClocks, closest } from "../src/shared/game.js";
+import { newGame, newDrill, drillSmoke, join, act, tick, view, TIMES, turnMs, nextWake, shiftClocks, closest } from "../src/shared/game.js";
 import { Commander } from "../src/client/ai.js";
 
 const seeded = (seed) => () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
@@ -521,31 +521,38 @@ test("the computer only uses supplies that are on", () => {
   assert.equal(ai.choosePower(3, 0, 2, { recon: false, sniper: false, smoke: false }), null);
 });
 
-test("a drill: the enemy never fires, every turn is yours, one crate for each supply", () => {
-  const g = newDrill({ name: "Alpha", now: 0, secret: "4071", mine: "5689" });
+test("a drill: the enemy never fires, every turn is yours, a crate for each supply in one turn", () => {
+  const g = newDrill({ name: "Alpha", now: 0, secret: "5019", mine: "5689" });
   let s = view(g, 0, 0);
   assert.equal(s.phase, "battle");
   assert.equal(s.turn, "me");
   assert.equal(s.me.supplies, 3);
   assert.equal(s.clock, null);
   assert.equal(nextWake(g), null);
-  let r = act(g, 0, { t: "fire", guess: "1024" }, 1);
-  assert.deepEqual(r.events.find(([seat]) => seat === 0)[1], { t: "volley", by: "me", guess: "1024", dead: 1, injured: 2, smoked: false, round: 1 });
+  let r = act(g, 0, { t: "fire", guess: "1234" }, 1);
+  assert.deepEqual(r.events.find(([seat]) => seat === 0)[1], { t: "volley", by: "me", guess: "1234", dead: 0, injured: 1, smoked: false, round: 1 });
   assert.equal(view(g, 0, 1).turn, "me");
   assert.deepEqual(act(g, 1, { t: "fire", guess: "1234" }, 1), { error: "Not your turn", events: [] });
-  r = act(g, 0, { t: "power", kind: "recon", digit: "7" }, 2);
+  assert.deepEqual(act(g, 0, { t: "fire", guess: "5678" }, 2).events[0][1], { t: "volley", by: "me", guess: "5678", dead: 1, injured: 0, smoked: false, round: 2 });
+  assert.equal(act(g, 0, { t: "fire", guess: "6782" }, 3).events[0][1].dead, 0);
+  r = act(g, 0, { t: "power", kind: "recon", digit: "9" }, 4);
   assert.equal(r.events[0][1].result, true);
-  assert.equal(act(g, 0, { t: "power", kind: "sniper", digit: "4", pos: 0 }, 2).error, "One supply per turn");
-  act(g, 0, { t: "fire", guess: "4012" }, 3);
-  assert.equal(act(g, 0, { t: "power", kind: "sniper", digit: "4", pos: 0 }, 4).events[0][1].result, true);
-  act(g, 0, { t: "fire", guess: "4013" }, 5);
-  assert.equal(act(g, 0, { t: "power", kind: "smoke" }, 6).error, undefined);
-  assert.equal(view(g, 0, 6).me.supplies, 0);
+  // The drill squad's one move: smoke, so the next volley reports only its hits.
+  assert.deepEqual(drillSmoke(g), [[0, { t: "power", by: "opp", kind: "smoke" }]]);
+  assert.deepEqual(drillSmoke(g), []);
+  assert.equal(view(g, 0, 4).opp.smoke, true);
+  assert.equal(act(g, 0, { t: "power", kind: "smoke" }, 5).error, undefined);
+  assert.deepEqual(act(g, 0, { t: "fire", guess: "5901" }, 6).events[0][1], { t: "volley", by: "me", guess: "5901", hits: 4, smoked: true, round: 4 });
+  assert.equal(act(g, 0, { t: "power", kind: "sniper", digit: "0", pos: 1 }, 7).events[0][1].result, true);
+  assert.equal(view(g, 0, 7).me.supplies, 0);
+  assert.equal(act(g, 0, { t: "power", kind: "recon", digit: "1" }, 7).error, "No crates left");
+  assert.deepEqual(act(g, 0, { t: "fire", guess: "5091" }, 8).events[0][1], { t: "volley", by: "me", guess: "5091", dead: 2, injured: 2, smoked: false, round: 5 });
   assert.deepEqual(tick(g, 1e9), []);
-  r = act(g, 0, { t: "fire", guess: "4071" }, 7);
+  r = act(g, 0, { t: "fire", guess: "5019" }, 9);
   const over = r.events.find(([seat, e]) => seat === 0 && e.t === "over")[1];
   assert.equal(over.winner, "me");
   assert.equal(over.reason, "cracked");
   assert.ok(!r.events.some(([, e]) => e.t === "laststand"));
   assert.equal(g.volleys.filter((v) => v.by === 1).length, 0);
+  assert.equal(drillSmoke(g).length, 0);
 });

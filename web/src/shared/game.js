@@ -45,7 +45,7 @@ export function newGame({ code, host, guest = null, now, timers = true, orders =
 }
 
 // Training: the enemy squad hides a code and never fires back. You hold every turn, with a crate
-// for each supply, and no clock runs.
+// for each supply that can go out in the same turn, and no clock runs.
 export const DRILL_NAME = "Drill squad";
 export function newDrill({ name, now, secret = randomCode(), mine = randomCode() }) {
   const g = newGame({ code: "DRILL", host: { id: "me", name }, guest: { id: "drill", name: DRILL_NAME }, now, timers: false });
@@ -57,6 +57,14 @@ export function newDrill({ name, now, secret = randomCode(), mine = randomCode()
   g.phase = "battle";
   g.started = now;
   return g;
+}
+
+// The drill squad pops smoke: their one move, so the next volley reports only its hits.
+export function drillSmoke(g) {
+  if (!g.drill || g.phase !== "battle" || g.p[1].smoke) return [];
+  g.p[1].smoke = true;
+  g.powers.push({ by: 1, kind: "smoke", args: null, result: true, at: g.volleys.length });
+  return [[0, { t: "power", by: "opp", kind: "smoke" }]];
 }
 
 const later = (g, now, ms) => (g.timers ? now + ms : null);
@@ -204,6 +212,8 @@ function volley(g, s, guess, now, ev) {
 
   const cracked = v.dead === 4;
   if (g.drill) {
+    // Nobody fires at you in the drill, so your own smoke lifts after your next volley.
+    g.p[s].smoke = false;
     if (cracked) return finish(g, s, "cracked", now, ev);
     g.round++;
     return;
@@ -272,7 +282,7 @@ export function act(g, s, msg, now, rng = Math.random) {
       if (!POWERS.includes(msg.kind)) return err("Unknown supply");
       if (!rulesOf(g)[msg.kind]) return err(`${POWER_NAMES[msg.kind]} is off in this match`);
       if (me.supplies < 1) return err("No crates left");
-      if (me.powerAt === g.volleys.length) return err("One supply per turn");
+      if (!g.drill && me.powerAt === g.volleys.length) return err("One supply per turn");
       let args = null;
       let result = true;
       if (msg.kind === "recon") {
