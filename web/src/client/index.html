@@ -77,8 +77,8 @@
         <p class="sheet-head" id="searchText" role="status">Scanning the airwaves</p>
         <div id="quickForm"></div>
       </section>
-      <section class="sheet roll" id="rollSheet" hidden aria-label="Roll of honour" tabindex="0">
-        <p class="sheet-head">Roll of honour</p>
+      <section class="sheet roll" id="rollSheet" hidden aria-label="Leaderboard" tabindex="0">
+        <p class="sheet-head">Leaderboard</p>
         <table class="board"><thead><tr><th>#</th><th>Callsign</th><th>W</th><th>L</th><th title="Soldiers killed">KIA</th></tr></thead><tbody id="boardBody"></tbody></table>
       </section>
       <section class="sheet notepad" id="tagSheet" hidden aria-label="Your dog tag">
@@ -95,6 +95,13 @@
       <div class="side opp"><b class="name" id="oppName">Enemy</b><span class="crates" id="oppCrates"></span><i class="dot" id="oppDot" title="Online"></i></div>
     </div>
     <p class="note" id="note"></p>
+    <aside class="drill" id="drill" hidden aria-label="Training">
+      <button type="button" class="drill-head" id="drillFold" aria-expanded="true" aria-controls="drillBody"><span>Training</span><em id="drillStep"></em></button>
+      <div class="drill-body" id="drillBody">
+        <p class="drill-said" id="drillSaid"></p>
+        <p class="drill-text" id="drillText" aria-live="polite"></p>
+      </div>
+    </aside>
 
     <div class="desk" id="desk">
       <section class="w w-aim" id="w-aim" data-win="aim" aria-labelledby="aimTitle" hidden>

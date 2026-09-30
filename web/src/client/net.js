@@ -1,4 +1,4 @@
-import { newGame, join, act, tick, view, shiftClocks, rulesOf } from "../shared/game.js";
+import { newGame, newDrill, join, act, tick, view, shiftClocks, rulesOf } from "../shared/game.js";
 import { Commander, LEVELS } from "./ai.js";
 import { randomCode, RPS, packOrders, cleanOrders } from "../shared/rules.js";
 
@@ -97,12 +97,13 @@ export class LocalMatch {
   constructor(level, name, onMessage, orders = null) {
     this.onMessage = onMessage;
     this.level = level;
-    this.ai = new Commander(level);
+    this.ai = level ? new Commander(level) : null;
     this.timers = new Map();
     this.pausedAt = null;
     const now = Date.now();
-    this.g = newGame({ code: "SOLO", host: { id: "me", name }, guest: { id: "cpu", name: LEVELS[level].name }, now, timers: false, orders });
+    if (level) this.g = newGame({ code: "SOLO", host: { id: "me", name }, guest: { id: "cpu", name: LEVELS[level].name }, now, timers: false, orders });
     this.clock = setInterval(() => this.tick(), 250);
+    if (!this.g) return;
     join(this.g, "me", name, now);
     const r = join(this.g, "cpu", LEVELS[level].name, now);
     this.turns = 0;
@@ -164,8 +165,8 @@ export class LocalMatch {
   }
 
   see(ev) {
-    if (ev.t === "volley" && ev.by === "me") this.ai.learn(ev);
-    if (ev.t === "power" && ev.by === "me") this.ai.learnPower(ev);
+    if (ev.t === "volley" && ev.by === "me") this.ai?.learn(ev);
+    if (ev.t === "power" && ev.by === "me") this.ai?.learnPower(ev);
   }
 
   cpu(msg) {
@@ -232,4 +233,22 @@ export class LocalMatch {
     clearInterval(this.clock);
     for (const job of this.timers.keys()) clearTimeout(job.id);
   }
+}
+
+// Training: the drill squad hides a code and holds still while you fire at it.
+export class DrillMatch extends LocalMatch {
+  constructor(name, onMessage) {
+    super(null, name, onMessage);
+    this.g = newDrill({ name, now: Date.now() });
+    queueMicrotask(() => {
+      this.onMessage({ t: "presence", opp: true });
+      this.onMessage(view(this.g, 0, Date.now()));
+    });
+  }
+
+  send(msg) {
+    if (msg.t !== "taunt") super.send(msg);
+  }
+
+  think() {}
 }

@@ -11,7 +11,7 @@ import { paintTextures, canvases } from "./textures.js";
 import { Sfx } from "./audio.js";
 import { MatchView } from "./match.js";
 import { Title } from "./title.js";
-import { RemoteMatch, LocalMatch, quickMatch } from "./net.js";
+import { RemoteMatch, LocalMatch, DrillMatch, quickMatch } from "./net.js";
 import { ROOM_RE, STANDARD_ORDERS, cleanOrders } from "../shared/rules.js";
 import { LEVELS } from "./ai.js";
 
@@ -352,11 +352,11 @@ class App {
     for (const [k, on] of [["effects", this.sfx.effects], ["music", this.sfx.music]]) document.querySelector(`[data-p="${k}"]`).setAttribute("aria-pressed", String(on));
     // Replaying the intro leaves the field, so it is offered only once a match is over.
     $("introRow").hidden = !this.replayIntro || this.inMatch() || reduced();
-    document.querySelector('[data-p="quit"]').textContent = this.inMatch() ? "Quit game" : "Back to base";
+    document.querySelector('[data-p="quit"]').textContent = this.inMatch() ? (this.view.drill ? "Leave training" : "Quit game") : "Back to base";
   }
 
   quitAsk(on) {
-    const ask = on && this.inMatch();
+    const ask = on && this.inMatch() && !this.view.drill;
     if (on && !ask) return this.quit();
     $("quitConfirm").hidden = !ask;
     $("pauseList").hidden = ask;
@@ -371,7 +371,7 @@ class App {
     const leaving = this.inMatch();
     if (leaving) {
       this.view.conn?.send({ t: "leave" });
-      if (this.view.solo) this.recordSolo("loss");
+      if (this.view.solo && !this.view.drill) this.recordSolo("loss");
     }
     this.quitAsk(false);
     dlg.close();
@@ -401,6 +401,9 @@ class App {
           bottom = below ? innerHeight - $("over").getBoundingClientRect().top + 8 : bar;
         }
         top = innerWidth < 900 ? 100 : 50;
+        // The lesson slip in training hangs below the header; on a wide screen the field moves down clear of it.
+        const slip = $("drill");
+        if (!slip.hidden && innerWidth >= 900) top = Math.max(top, slip.getBoundingClientRect().bottom - 30);
       } else if (this.screen === "menu") {
         // An open sheet takes the bottom of an upright phone, so the place moves up above it;
         // anywhere else the sheet stands to the right and the place moves left of it.
@@ -547,7 +550,8 @@ class App {
     if (phase === "lobby" || this.screen === "match") return;
     this.show("match");
     // Joined into a match already under way: no walk out of the trench, and no commanders.
-    if (phase !== "supply") {
+    // Training walks out over the top on its own.
+    if (phase !== "supply" && !this.view.drill) {
       this.title.leave();
       this.parade(false);
     }
@@ -637,6 +641,16 @@ class App {
     view.start(null, { solo: true, level });
     view.conn = new LocalMatch(level, name, (m) => view.message(m), this.orders);
     this.toast(`${LEVELS[level].name}: ${LEVELS[level].note.toLowerCase()}`);
+  }
+
+  // Training: a practice match against the drill squad, who hide a code and never fire back.
+  drill() {
+    this.lobby?.cancel();
+    this.lobby = null;
+    this.show("match");
+    const view = this.view;
+    view.start(null, { drill: true });
+    view.conn = new DrillMatch(this.me?.name || "You", (m) => view.message(m));
   }
 
   async create() {
