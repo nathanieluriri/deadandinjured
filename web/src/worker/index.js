@@ -3,6 +3,7 @@ import { Lobby } from "./lobby.js";
 import { currentPlayer, startSession, endSession, cookieFor, enlist, login, hashPassword, publicPlayer } from "./auth.js";
 import { googleReady, googleStart, googleCallback, pendingGoogle, linkGoogle, clearPending } from "./google.js";
 import { roomCode, ROOM_RE, cleanOrders } from "../shared/rules.js";
+import { afterAccount, afterMatch, bindCode, cleanCode, codeCookie, readCode } from "./iqly.js";
 
 export { Room, Lobby };
 
@@ -23,17 +24,21 @@ async function body(req) {
   }
 }
 
-async function signedIn(req, env, url, id, status = 200) {
+async function signedIn(req, env, url, id, status = 200, ctx) {
   const token = await startSession(env, id);
   const sub = await pendingGoogle(req, env);
   const linked = !!sub && (await linkGoogle(env, id, sub));
+  const code = readCode(req);
+  if (code) await bindCode(env, id, code);
+  afterAccount(env, ctx, { playerId: id, code });
   const p = await env.DB.prepare("SELECT * FROM players WHERE id = ?1").bind(id).first();
   const res = json({ player: publicPlayer(p), linked }, status, { "Set-Cookie": cookieFor(token, url) });
   if (sub) res.headers.append("Set-Cookie", clearPending(url));
+  if (code) res.headers.append("Set-Cookie", codeCookie(code, url));
   return res;
 }
 
-async function api(req, env, url) {
+async function api(req, env, url, ctx) {
   const path = url.pathname;
   if (req.method === "POST" && !sameOrigin(req, url)) return json({ error: "Bad origin" }, 403);
 
@@ -42,19 +47,37 @@ async function api(req, env, url) {
   if (path === "/api/auth/google" && req.method === "GET") return googleStart(req, env, url);
   if (path === "/api/auth/google/callback" && req.method === "GET") return googleCallback(req, env, url);
 
+  if (path === "/api/iqly" && req.method === "POST") {
+    const code = cleanCode((await body(req)).code) || readCode(req);
+    if (!code) return json({ error: "Missing iQLY code" }, 400);
+    const me = await currentPlayer(req, env);
+    if (me) {
+      await bindCode(env, me.id, code);
+      afterAccount(env, ctx, { playerId: me.id, code });
+    }
+    return json({ ok: true, bound: !!me }, 200, { "Set-Cookie": codeCookie(code, url) });
+  }
+
   if (path === "/api/enlist" && req.method === "POST") {
     const me = await currentPlayer(req, env);
     if (me) return json({ player: publicPlayer(me) });
-    const r = await enlist(env, (await body(req)).name);
+    const b = await body(req);
+    const r = await enlist(env, b.name);
     if (r.error) return json({ error: r.error }, 409);
-    return signedIn(req, env, url, r.id, 201);
+    const code = cleanCode(b.code) || readCode(req);
+    if (code) await bindCode(env, r.id, code);
+    afterAccount(env, ctx, { playerId: r.id, code });
+    return signedIn(req, env, url, r.id, 201, ctx);
   }
 
   if (path === "/api/login" && req.method === "POST") {
     const b = await body(req);
     const r = await login(env, b.name, b.password);
     if (r.error) return json({ error: r.error }, 401);
-    return signedIn(req, env, url, r.id);
+    const code = cleanCode(b.code) || readCode(req);
+    if (code) await bindCode(env, r.id, code);
+    afterAccount(env, ctx, { playerId: r.id, code });
+    return signedIn(req, env, url, r.id, 200, ctx);
   }
 
   if (path === "/api/logout" && req.method === "POST") {
@@ -93,9 +116,11 @@ async function api(req, env, url) {
   if (path === "/api/solo" && req.method === "POST") {
     const me = await currentPlayer(req, env);
     if (!me) return json({ ok: false });
-    const col = { win: "solo_wins", loss: "solo_losses", draw: "solo_draws" }[(await body(req)).result];
+    const result = (await body(req)).result;
+    const col = { win: "solo_wins", loss: "solo_losses", draw: "solo_draws" }[result];
     if (!col) return json({ error: "Win, loss or draw" }, 400);
     await env.DB.prepare(`UPDATE players SET ${col} = ${col} + 1 WHERE id = ?1`).bind(me.id).run();
+    afterMatch(env, ctx, { playerId: me.id, kind: "solo", result, matchId: `solo-${Date.now()}` });
     return json({ ok: true });
   }
 
@@ -126,11 +151,11 @@ async function socket(req, env, url) {
 }
 
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const url = new URL(req.url);
     try {
       if (url.pathname.startsWith("/ws/")) return await socket(req, env, url);
-      if (url.pathname.startsWith("/api/")) return await api(req, env, url);
+      if (url.pathname.startsWith("/api/")) return await api(req, env, url, ctx);
     } catch (e) {
       console.error(e);
       return json({ error: "Something broke on our side" }, 500);

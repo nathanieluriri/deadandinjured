@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { newGame, join, act, tick, view, nextWake, rulesOf, TIMES } from "../shared/game.js";
+import { afterMatch } from "./iqly.js";
 
 const IDLE = 30 * 60e3;
 const AFTER = 10 * 60e3;
@@ -194,6 +195,18 @@ export class Room extends DurableObject {
       await db.batch(stmts);
     } catch (e) {
       console.error("could not record the match", e);
+    }
+    if (["noshow", "cancelled"].includes(res.reason)) return;
+    const matchId = `${g.code}-${g.created}-${g.match}`;
+    for (const s of [0, 1]) {
+      if (!g.p[s]) continue;
+      const result = res.winner === -1 ? "draw" : res.winner === s ? "win" : "loss";
+      afterMatch(this.env, this.ctx, {
+        playerId: g.p[s].id,
+        kind: "multi",
+        result,
+        matchId,
+      });
     }
   }
 }

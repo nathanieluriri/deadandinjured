@@ -54,6 +54,8 @@ npx wrangler d1 execute dead-and-injured --remote --file schema.sql
 npm run deploy
 ```
 
+iQLY activations land with `?ref={code}`. The Worker stores that code on the player and POSTs signed postbacks to `IQLY_POSTBACK_URL` when they enlist, finish a match, win, or finish a multiplayer match. Set `IQLY_KEY` and `IQLY_SECRET` as Worker secrets. Apply `schema-iqly.sql` on D1 once.
+
 Passwords are hashed with PBKDF2 and a pepper kept as a Worker secret (`wrangler secret put PEPPER`); set it once, before anyone adds a password. Google sign-in needs an OAuth client of type Web application whose redirect URI is `https://dead-and-injured.uririnathaniel.workers.dev/api/auth/google/callback`: its ID is in `wrangler.jsonc` and its secret is a Worker secret (`wrangler secret put GOOGLE_CLIENT_SECRET`). A database made before Google sign-in gets its column once, before `schema.sql`: `npx wrangler d1 execute dead-and-injured --remote --command "ALTER TABLE players ADD COLUMN google TEXT"`. The icons and logo images in `static/` come from the live 3D logo: `node tools/logo-shots.mjs` with `wrangler dev` running, and `node tools/icons.mjs` for the SVG favicon.
 
 Everything fits the Workers free plan: static assets are free, rooms sleep between moves, and D1 is written once per match.

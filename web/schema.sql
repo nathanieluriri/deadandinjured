@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS players (
   solo_wins INTEGER NOT NULL DEFAULT 0,
   solo_losses INTEGER NOT NULL DEFAULT 0,
   solo_draws INTEGER NOT NULL DEFAULT 0,
-  google TEXT
+  google TEXT,
+  iqly_code TEXT
 );
 
 CREATE INDEX IF NOT EXISTS players_rank ON players (wins DESC, losses ASC);
@@ -42,3 +43,12 @@ CREATE TABLE IF NOT EXISTS matches (
 
 CREATE INDEX IF NOT EXISTS matches_p1 ON matches (p1, ended_at);
 CREATE INDEX IF NOT EXISTS matches_p2 ON matches (p2, ended_at);
+
+CREATE TABLE IF NOT EXISTS iqly_events (
+  player_id TEXT NOT NULL,
+  event TEXT NOT NULL,
+  txn_id TEXT NOT NULL,
+  sent_at INTEGER NOT NULL,
+  status TEXT,
+  PRIMARY KEY (player_id, event)
+);

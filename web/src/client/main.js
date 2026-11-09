@@ -63,8 +63,11 @@ class App {
     const q = new URLSearchParams(location.search);
     this.googleSaid = q.get("google");
     this.googleNew = this.googleSaid === "new";
-    if (this.googleSaid) {
+    this.iqlyCode = q.get("ref") || store("di.iqly") || "";
+    if (this.iqlyCode) store("di.iqly", this.iqlyCode);
+    if (this.googleSaid || q.get("ref")) {
       q.delete("google");
+      q.delete("ref");
       history.replaceState(null, "", location.pathname + (String(q) ? `?${q}` : ""));
     }
   }
@@ -130,6 +133,7 @@ class App {
     await textures;
     this.layout();
     await Promise.race([document.fonts?.ready, new Promise((r) => setTimeout(r, 1500))]);
+    if (this.iqlyCode) api("/api/iqly", { code: this.iqlyCode }).catch(() => {});
     const me = await api("/api/me").catch(() => ({ player: null }));
     this.me = me.player;
     this.googleOn = !!me.google;
@@ -595,7 +599,9 @@ class App {
     const btn = $("enlistGo");
     btn.disabled = true;
     try {
-      const r = this.signingIn ? await api("/api/login", { name, password: $("enlistPass").value }) : await api("/api/enlist", { name });
+      const payload = { name, code: this.iqlyCode || store("di.iqly") || undefined };
+      if (this.signingIn) payload.password = $("enlistPass").value;
+      const r = this.signingIn ? await api("/api/login", payload) : await api("/api/enlist", payload);
       this.me = r.player;
       this.renderWho();
       this.sfx.play("lock");
